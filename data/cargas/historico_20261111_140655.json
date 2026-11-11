@@ -1,0 +1,26 @@
+{
+  "lote_fecha_carga": "2026-11-11 14:06:55",
+  "filas": 15794,
+  "por_archivo": {
+    "enero": 1324,
+    "febrero": 1266,
+    "marzo": 1507,
+    "abril": 1426,
+    "mayo": 1334,
+    "junio": 1654,
+    "julio": 1755,
+    "agosto": 1724,
+    "septiembre": 3804
+  },
+  "origen": "/opt/apps/claro_analisis_umm/Suficiencia Soporte/Historico CES",
+  "tabla": "INVITADO_15.TBL_ENC_SOPORTE_FALLAS",
+  "antes": 793,
+  "despues": 16587,
+  "recortados": [
+    [
+      "R_1uWYV4VVFDEHRJn",
+      "Q10"
+    ]
+  ],
+  "revertir": "DELETE FROM INVITADO_15.TBL_ENC_SOPORTE_FALLAS WHERE FECHA_CARGA = TO_DATE('2026-11-11 14:06:55', 'YYYY-MM-DD HH24:MI:SS')"
+}

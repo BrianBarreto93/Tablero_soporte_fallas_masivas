@@ -1,0 +1,5 @@
+oracledb>=2.0
+pandas>=2.2
+python-dotenv>=1.0
+paramiko>=3.0
+pytest>=8.0
