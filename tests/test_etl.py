@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from etl import agregar, calidad, verbatims
+from etl import agregar, calidad, dolores, verbatims
 from etl.config import DIR_PERIODOS
 from etl.limpiar import aliado, alinear_analitica, frase, limpiar, region, red, temas, texto_opcion
 
@@ -183,3 +183,43 @@ def test_base_descargable():
         assert calidad.escanear_pii([(t, []) for t in textos]) == [], f.name
     prohibidas = {"cuenta", "teléfono", "telefono", "correo", "cédula", "identificación", "nombre"}
     assert not [c for c in base.COLUMNAS if any(p in c.lower() for p in prohibidas)]
+
+
+# ------------------------------------------------------------------ dolores
+def test_dolores_reglas_y_cubo():
+    c = pd.concat([_crudo(Q3="Nadie contesta y se corta la llamada"),
+                   _crudo(RESPONSEID="R_2", Q2="2", Q2_NPS_GROUP="Detractor", Q8="No", Q13="Llevo 8 días sin internet")],
+                  ignore_index=True)
+    d = limpiar(c)
+    m = dolores.marcar(c, d)
+    assert m.loc[0, "contacto"] and not m.loc[0, "persiste"]
+    assert m.loc[1, "persiste"] and m.loc[1, "tiempo"] and m.alguno.all()
+    filas = agregar.cubo(d, m)
+    dl = {}
+    for f in filas:
+        for k, v in f.get("dl", {}).items():
+            dl[k] = [a + b for a, b in zip(dl.get(k, [0] * 5), v)]
+    assert dl["persiste"] == [1, 0, 1, 1, 1] and dl["alguno"][0] == 2
+
+
+# Deck «Dolores del cliente · Soporte y Fallas masivas Hogar» (ene–ago 2026, misma taxonomía):
+# encuestas con el dolor y brecha de NPS (sin − con) redondeada
+@pytest.mark.parametrize("estudio,clave,n,brecha", [
+    ("Soporte", "contacto", 1348, 59), ("Soporte", "visita", 782, 64), ("Soporte", "persiste", 4791, 131),
+    ("Falla masiva", "aviso", 340, 37), ("Falla masiva", "tiempo", 1162, 49), ("Falla masiva", "persiste", 2244, 93)])
+def test_dolores_cuadran_con_deck(estudio, clave, n, brecha):
+    tot, con = [0] * 3, [0] * 3
+    for p in [f"2026{m:02d}" for m in range(1, 9)]:
+        f = DIR_PERIODOS / f"{p}.json"
+        if not f.exists():
+            pytest.skip(f"sin {p}")
+        for r in json.loads(f.read_text(encoding="utf-8"))["filas"]:
+            if r["d"]["estudio"] != estudio:
+                continue
+            tot = [a + b for a, b in zip(tot, r["m"][:3])]
+            if clave in r.get("dl", {}):
+                con = [a + b for a, b in zip(con, r["dl"][clave][:3])]
+    sin = [a - b for a, b in zip(tot, con)]
+    nps = lambda x: (x[1] - x[2]) / x[0] * 100
+    assert con[0] == n
+    assert round(nps(sin) - nps(con)) == brecha

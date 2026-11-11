@@ -1,5 +1,12 @@
 # Cambios
 
+## 2026-11-11 · v3
+
+- Caja «Dolores del cliente» en Resumen: 9 dolores con la taxonomía de los análisis de suficiencia de Soporte y Fallas masivas,
+  NPS y CES con y sin cada dolor, y puntos de NPS recuperables en teoría. Mes o año corrido; responde a todos los filtros.
+- `etl/dolores.py` y conteos por dolor en el cubo (tabla dispersa `dolores` en `datos.js`). Ene–ago cuadra con los decks.
+- Botón «Descargar base» (Excel, CSV o Parquet) según los filtros.
+
 ## 2026-11-11 · v2
 
 - Histórico ene–sep 2026 (15.794 encuestas) cargado en Oracle desde los exportes de Qualtrics (`etl/cargar_historico.py`); 1 comentario recortado a 4000 bytes.

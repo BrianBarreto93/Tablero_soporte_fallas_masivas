@@ -363,6 +363,96 @@ function montarRanking(raiz) {
   });
 }
 
+// ------------------------------------------------------------------ dolores (cruce con NPS y CES)
+// Conteos por fila del cubo y dolor: [n, prom, det, ces_ok, ces_val]. Los de «sin el dolor» salen por resta del total.
+const DL = D.dolores, DLF = new Map();
+for (const f of DL.filas) { if (!DLF.has(f[0])) DLF.set(f[0], []); DLF.get(f[0]).push(f); }
+const DOLOR = {
+  aviso: ['Nadie avisa ni dice cuándo vuelve', 'No hubo ningún tipo de notificación sobre la falla ni un plan de contingencia.'],
+  contacto: ['Llegar a un asesor es una odisea', 'Nadie contesta, y llega un momento en que se corta la llamada.'],
+  asesor: ['Solo me dicen «reinicie el módem»', 'Solo me dicen que reinicie o desconecte el módem; así no se soluciona nada.'],
+  visita: ['El técnico no llega o no resuelve', 'Me agendaron cita y nunca llegaron.'],
+  tiempo: ['Pasan días sin solución', 'Llevo más de 15 días y no han podido resolverlo.'],
+  promesa: ['Prometen plazos que no cumplen', 'Me dicen que en 7 horas, después que en 4… y llevo 4 días sin internet.'],
+  persiste: ['Cierran el caso y la falla sigue', 'Nunca llegó el técnico, perdimos el tiempo y declararon el servicio como satisfactorio.'],
+  recurrente: ['La falla vuelve a los pocos días', 'Funcionó un día y hoy otra vez no tengo internet.'],
+  cobro: ['Pago completo por días sin servicio', 'Fueron 3 días sin teléfono, internet ni televisión, y la factura llega igual.'],
+};
+const dolEst = {rango: 'mes'};
+function filasDolor() {
+  if (dolEst.rango === 'mes') return filas();
+  const anio = PERIODOS[st.periodo].slice(0, 4);
+  return filas({periodo: null}).filter(i => { const p = PERIODOS[D.cubo[i][0]]; return p.slice(0, 4) === anio && D.cubo[i][0] <= st.periodo; });
+}
+const npsDe = (n, prom, det) => n ? (prom - det) / n * 100 : null;
+const cesDe = (ok, val) => val ? ok / val * 100 : null;
+function calcDolores(idx) {
+  const a = sumar(idx), s = DL.claves.map(() => [0, 0, 0, 0, 0]);
+  for (const i of idx) for (const f of DLF.get(i) || []) { const t = s[f[1]]; for (let j = 0; j < 5; j++) t[j] += f[2 + j]; }
+  const cv = a.q6_1 + a.q6_2 + a.q6_3 + a.q6_4 + a.q6_5, cok = a.q6_4 + a.q6_5;
+  const tot = {n: a.n, nps: npsDe(a.n, a.prom, a.det), ces: cesDe(cok, cv)};
+  const fila = (k, [n, prom, det, ok, val]) => {
+    const con = npsDe(n, prom, det), sin = npsDe(a.n - n, a.prom - prom, a.det - det);
+    return {k, n, nSin: a.n - n, pct: a.n ? n / a.n * 100 : 0, con, sin, cesCon: cesDe(ok, val), cesSin: cesDe(cok - ok, cv - val),
+      pts: con != null && sin != null ? n / a.n * (sin - con) : null};
+  };
+  const todas = DL.claves.map((k, i) => fila(k, s[i]));
+  return {tot, alguno: todas.find(x => x.k === 'alguno'), dol: todas.filter(x => x.k !== 'alguno')};
+}
+// Pista de −100 a 100 (NPS) o de 0 a 100 (CES) con los dos puntos: con el dolor y sin él
+function pista(con, sin, min, ref, suf, tip) {
+  if (con == null || sin == null) return '<div class="pz vacia">—</div>';
+  const X = v => (v - min) / (100 - min) * 100, lo = Math.min(con, sin), hi = Math.max(con, sin);
+  const etq = v => `${f0(v)}${suf}`;
+  return `<div class="pz" ${tipAttr(tip)}><div class="riel">${min < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
+    ${ref != null ? `<span class="ref" style="left:${X(ref)}%"></span>` : ''}
+    <span class="tramo" style="left:${X(lo)}%;width:${X(hi) - X(lo)}%"></span>
+    <span class="pt sin" style="left:${X(sin)}%"></span><span class="pt con" style="left:${X(con)}%"></span>
+    <span class="lbl izq" style="right:${100 - X(lo)}%">${etq(lo)}</span><span class="lbl der" style="left:${X(hi)}%">${etq(hi)}</span></div></div>`;
+}
+function vDolores() {
+  const idx = filasDolor(), {tot, alguno, dol} = calcDolores(idx);
+  const rango = dolEst.rango === 'mes' ? mesL(PERIODOS[st.periodo]) : `ene a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
+  const orden = dol.filter(x => x.n).sort((a, b) => (b.n >= NMIN) - (a.n >= NMIN) || b.pts - a.pts);
+  const maxPts = Math.max(1, ...orden.filter(x => x.n >= NMIN).map(x => x.pts));
+  const X = v => (v + 100) / 2;
+  const techo = alguno && alguno.sin != null && alguno.nSin >= NMIN ? alguno.sin : null;
+  const cab = tot.nps == null ? '' : `
+    <div class="dol-hero">
+      <div class="dh-num"><span>NPS hoy</span><b>${f1(tot.nps)}</b></div>
+      <div class="dh-pista" ${tipAttr(`<div class="t">Techo teórico</div>Las ${f0(alguno.nSin)} encuestas que no mencionan ningún dolor dan un NPS de ${techo == null ? '—' : f1(techo)}. Si todos calificaran así, el NPS subiría ${techo == null ? '—' : f1(techo - tot.nps)} pts.`)}>
+        <div class="riel"><span class="cero" style="left:50%"></span>
+          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.nps, techo))}%;width:${Math.abs(X(techo) - X(tot.nps))}%"></span><span class="pt fin" style="left:${X(techo)}%"></span>`}
+          <span class="pt hoy" style="left:${X(tot.nps)}%"></span></div>
+        <div class="escala"><span>−100</span><span>0</span><span>100</span></div></div>
+      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : f1(techo)}</b></div>
+      <div class="dh-pts"><b>${techo == null ? '—' : fpp(techo - tot.nps)}</b><span>pts de NPS en juego</span></div>
+      <p class="dh-pie">${f1(alguno.pct)} % de las encuestas (${f0(alguno.n)} de ${f0(tot.n)}) menciona al menos un dolor. Su NPS es ${f1(alguno.con)}${alguno.cesCon != null ? ` y su CES ${f1(alguno.cesCon)} %` : ''}.</p>
+    </div>`;
+  const filasH = orden.map((x, i) => {
+    const [tit, cita] = DOLOR[x.k], poca = x.n < NMIN, br = x.sin - x.con;
+    const tipN = `<div class="t">${esc(tit)}</div>NPS con el dolor: <b>${f1(x.con)}</b> (n ${f0(x.n)})<br>NPS sin el dolor: <b>${f1(x.sin)}</b> (n ${f0(x.nSin)})<br>Brecha: ${f1(br)} pts`;
+    const tipC = `<div class="t">CES · ${esc(tit)}</div>Con el dolor: <b>${x.cesCon == null ? '—' : f1(x.cesCon) + ' %'}</b><br>Sin el dolor: <b>${x.cesSin == null ? '—' : f1(x.cesSin) + ' %'}</b>${x.cesCon != null && x.cesSin != null ? `<br>Brecha: ${f1(x.cesSin - x.cesCon)} pp` : ''}`;
+    const tipP = `<div class="t">Si este dolor desapareciera</div>Quienes lo viven (${f1(x.pct)} %) pasarían a calificar como quienes no lo viven: el NPS iría de ${f1(tot.nps)} a ${f1(x.sin)}.<br>${f1(x.pct)} % × ${f1(br)} pts de brecha = <b>${fpp(x.pts)} pts</b>`;
+    return `<li class="dol${poca ? ' poca' : ''}">
+      <span class="rk">${String(i + 1).padStart(2, '0')}</span>
+      <div class="qu"><span class="mom">${DL.momentos[x.k]}</span><b>${esc(tit)}</b><q>${esc(cita)}</q></div>
+      <div class="vive"><b>${f1(x.pct)} %</b><span>${f0(x.n)} encuestas</span>${poca ? '<span class="bajo">muestra baja</span>' : ''}</div>
+      ${pista(x.con, x.sin, -100, tot.nps, '', tipN)}
+      ${pista(x.cesCon, x.cesSin, 0, tot.ces, ' %', tipC)}
+      <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : fpp(x.pts)}</b><small>pts</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%"></i></span></div>
+    </li>`;
+  }).join('');
+  return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
+      <div class="herr"><div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">Mes</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
+      <p class="sub">${alcance()} · ${rango}. Lo que cuentan los clientes en sus comentarios, cruzado con lo que responden de NPS y CES. Arriba, el dolor que más puntos de NPS le quita a la nota.</p></header>
+    ${cab}
+    <div class="dol-ley" aria-hidden="true"><span></span><span>Lo vive</span><span><i class="pt con"></i>Con el dolor <i class="pt sin"></i>Sin el dolor <i class="ref"></i>Total del corte · NPS</span><span>CES</span><span>NPS que recupera</span></div>
+    <ol class="dol-lista">${filasH || '<li class="vacio">Sin encuestas con estos filtros</li>'}</ol>
+    <p class="nota dol-nota">Cada dolor sale de los comentarios (Q3, Q13, Q7 y Q10) con las mismas reglas de los análisis de dolores de Soporte y Fallas masivas. «La falla sigue» suma además a quien responde que su servicio no funciona (Q8). Los puntos son teóricos: suponen que quien deja de vivir el dolor califica igual que quien nunca lo vivió. Como un cliente puede tener varios dolores, los puntos de las filas no se suman; el número de arriba cuenta cada encuesta una sola vez.</p>
+  </section>`;
+}
+
 // ------------------------------------------------------------------ vistas
 function vResumen(p) {
   const a = sumar(filas()), ant = st.periodo > 0 ? st.periodo - 1 : null, aAnt = ant != null ? sumar(filas({periodo: ant})) : null, etA = ant != null ? mesC(PERIODOS[ant]) : '';
@@ -388,7 +478,9 @@ function vResumen(p) {
         ${lineasPH(st.evo, st.modo, 'evo')}</section>
       <section class="panel"><header><h2 ${tipAttr('Mismo mes y filtros, sin el filtro de estudio. Escala: NPS de −100 a 100; el resto de 0 a 100 %.')}>Soporte vs Falla masiva <span class="info">?</span></h2><div class="leyenda">${EST.map(e => `<span><i style="background:${CE[e]}"></i>${e === 'Falla masiva' ? 'FM' : e}</span>`).join('')}</div></header><div class="vs">${vs}</div></section>
     </div>
+    ${vDolores()}
     ${carrusel('res', ['det', 'pro', 'dif', 'nof', 'amal'])}`;
+  p.querySelectorAll('#dol-r button').forEach(b => b.onclick = () => { dolEst.rango = b.dataset.r; pintarTab(); });
   p.querySelectorAll('#evo-k button').forEach(b => b.onclick = () => { st.evo = b.dataset.k; pintarTab(); });
   p.querySelectorAll('#evo-m button').forEach(b => b.onclick = () => { st.modo = b.dataset.m; pintarTab(); });
 }

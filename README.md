@@ -29,6 +29,7 @@ cd /opt/apps/claro_tablero_sop_fm
 | Extraer | `etl/extraer.py` | `SELECT` con lista blanca de columnas (`etl/config.py`). Nunca `SELECT *`. Cuentas repetidas se cuentan en SQL. |
 | Limpiar | `etl/limpiar.py` | Quita emojis de las opciones, Q6 → escala 1–5, código de división → región, red con fecha → «Sin dato», unifica aliados (S.A.S., LTDA), reasigna la analítica de texto de Qualtrics. |
 | Calidad | `etl/calidad.py` | Contrato de datos: errores que bloquean y avisos que se muestran en la pestaña *Calidad de datos*. |
+| Dolores | `etl/dolores.py` | Marca 9 dolores por encuesta con las reglas de los decks de dolores (`claro_analisis_umm/Soporte y fallas/analisis_dolores.py`, copiadas sin cambios). «La falla sigue» suma Q8 = No. |
 | Comentarios | `etl/verbatims.py` | Tapa correos, cifras de 5+ dígitos, nombre del encuestado y nombres tras «técnico», «asesor», «señor»… |
 | Agregar | `etl/agregar.py` | Cubo de **conteos sumables** (no porcentajes) por periodo × semana × estudio × región × red × marcación × aliado × operación × estrato. |
 | Tablero | `tablero/app.js` | Suma las filas que pasan los filtros y calcula los indicadores: cualquier combinación da el valor ponderado correcto. |
@@ -48,6 +49,10 @@ arriba; el menú lateral y la barra de filtros quedan fijos al desplazar. Modo c
 - **CES** = (Fácil + Muy fácil) / respuestas válidas de Q6. Más alto = mejor.
 - **Servicio funcionando** = Q8 «Sí» / (Sí + No).
 - **Desempeño del asesor** = % de calificaciones 4–5 en los cuatro atributos de Q9 (sin confirmar con negocio).
+- **Dolores** (caja en Resumen): % de encuestas que menciona el dolor, NPS y CES con y sin él, y los puntos de NPS que se
+  recuperarían en teoría = % con el dolor × (NPS sin − NPS con). Es decir, el NPS pasaría a ser el de quienes no lo viven.
+  Los dolores se cruzan, así que los puntos no se suman; el techo de arriba usa las encuestas sin ningún dolor.
+  Ene–ago cuadra con los decks de dolores de Suficiencia Soporte y Suficiencia Fallas Masivas (prueba automática).
 - Periodo = mes de `RECORDEDDATE` (coincide 100 % con los exportes oficiales; con él la serie CES cuadra exacto con el Power BI). Unidad = encuesta (`RESPONSEID`). Muestra baja = n < 30.
 
 ### Trampas conocidas de la fuente (oct-2026)
