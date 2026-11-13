@@ -415,6 +415,55 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media print{.rail,.top{display:none}.app{display:block}}
 </style>
+<link rel="stylesheet" href="graficos.css">
+<style>
+/* ===== Ajustes de este tablero sobre graficos.css (va después para ganar) ===== */
+/* KPI: el anillo vive en la esquina; la etiqueta no se mete debajo */
+.kpi .et{padding-right:66px}
+.kpi.estrella .et{padding-right:74px}
+/* Líneas: puntos, áreas y etiqueta con animación CSS (en SVG, Motion no puede quitar el estado inicial en línea) */
+.chart svg .g-pt{transform-box:fill-box;transform-origin:center}
+.l-pop{animation:l-pop .5s cubic-bezier(.34,1.56,.64,1) both}
+.l-ap{animation:l-ap .8s ease-out both}
+.quieto .l-pop,.quieto .l-ap{animation:none}
+@keyframes l-pop{from{opacity:0;transform:scale(.2)}to{opacity:1;transform:scale(1)}}
+@keyframes l-ap{from{opacity:0}to{opacity:1}}
+/* Spark de la librería: su área usa data-an="aparece" en SVG y quedaría oculta; esta animación la muestra */
+.g-spark path[data-an="aparece"]{animation:l-ap .8s .6s ease-out both}
+/* Cifras que cuentan: heredan la letra de la cifra grande */
+.dh-num b>.g-cuenta,.dh-pts b>.g-cuenta,.dol .vive b>.g-cuenta,.vs .b>.g-cuenta,.dol .gana b>.g-cuenta{font:inherit;letter-spacing:inherit;color:inherit;text-transform:none}
+.chart svg .val{paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+/* Pesa sobre la rampa: puntos con halo para leerse encima de cualquier tono */
+.pesa .riel{height:6px;top:10px;border-radius:3px}
+.pesa .pt{box-shadow:0 1px 6px rgba(0,0,0,.28)}
+.pesa .une{height:2px;top:12px;background:var(--ink);opacity:.45}
+/* Divergente: el último tramo se redondea (el marcador del centro también es un span) */
+.g-tira span:nth-last-child(2){border-radius:0 7px 7px 0}
+.g-tira span.g-centro{border-radius:2px}
+/* Dolores: los puntos se centran con márgenes (la animación «pop» usa transform) */
+.pz .pt{transform:none;margin:-6.5px 0 0 -6.5px}
+/* Resolución: brecha más alta para que acompañe a la composición */
+.res-br .g-br-col{grid-template-rows:370px auto}
+.res-br .g-br-pista,.res-br .g-br-guias{height:370px}
+.res-br .g-brecha{flex:1;align-content:space-between}
+@media (max-width:1300px){.res-br .g-br-col{grid-template-rows:280px auto}.res-br .g-br-pista,.res-br .g-br-guias{height:280px}}
+/* Composición: donas arriba, waffles abajo, tres por fila */
+.comp-b+.comp-b{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.comp-b h3{margin:0 0 2px;font:800 11px/1.2 var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.comp .g-donas,.comp .g-waffles{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+.comp .g-dona-svg{max-width:122px}
+.comp .g-dona-c b{font-size:24px}
+.comp .g-celdas{max-width:150px}
+.comp .g-fin{font-size:20px}
+/* Cajón: relojes del asesor en una fila */
+.cajon .g-relojes{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cajon .g-reloj figcaption b{font-size:11.5px}
+.cajon .g-reloj figcaption span{flex-wrap:wrap;gap:0 5px}
+@media (max-width:760px){
+  .cajon .g-relojes{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .res-br .g-br-col{grid-template-rows:220px auto}.res-br .g-br-pista,.res-br .g-br-guias{height:220px}
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -447,6 +496,8 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 <div id="tip" role="tooltip"></div>
 <script src="datos.js"></script>
 <script src="exportar.js"></script>
+<script src="vendor/motion.js"></script>
+<script src="graficos.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

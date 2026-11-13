@@ -1,5 +1,17 @@
 # Cambios
 
+## 2026-11-13 · v5
+
+- Gráficos animados con Motion (`tablero/vendor/motion.js`, copia local: funciona sin internet). La librería
+  `tablero/graficos.js` + `graficos.css` es la misma en los tableros Factura y Soporte-FM; si se cambia una copia, copiar a la otra.
+- Escala evaluativa de 9 tonos: rojo intenso (lo peor) → verde sobrio (lo mejor), en claro y oscuro. Los colores de serie
+  (Soporte/Falla masiva) no cambian. Los tonos intermedios van en rosa/coral para no confundirse con el naranja de serie.
+- Más variedad: anillo en cada KPI, cifras que cuentan, tendencias de área, barras divergentes 1–5 que crecen desde el centro,
+  cuadrícula de 100 cuadritos para el NPS, donas sí/no, columnas apiladas, motivos como paletas, relojes, brecha en columnas
+  y rankings coloreados según la diferencia contra el total.
+- Cada panel se anima al entrar en pantalla; al imprimir, con «reducir movimiento» o sin motion.js todo se ve en su estado final.
+- Ninguna cifra cambia: se comprobaron todos los números de tooltips y textos contra la versión anterior.
+
 ## 2026-11-13 · v4
 
 - Junto al n de CES, Funcionando y Asesor va la correlación con el NPS (Pearson, encuesta por encuesta), en verde (fuerte),

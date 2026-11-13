@@ -59,7 +59,7 @@ const IND = {
 };
 const KS = ['nps', 'ces', 'fun', 'ase'];
 const fmt = (k, r) => r == null ? '—' : (k === 'nps' ? f1(r.v) : f1(r.v) + ' %');
-const fmtGrande = (k, r) => r == null ? '—' : `${f1(r.v)}<small>${k === 'nps' ? 'pts' : '%'}</small>`;
+const fmtGrande = (k, r) => r == null ? '—' : `${G.cuenta(r.v, 1)}<small>${k === 'nps' ? 'pts' : '%'}</small>`;
 
 // ------------------------------------------------------------------ estado + URL
 const TABS = [['resumen', 'Resumen'], ['facilidad', 'Facilidad'], ['resolucion', 'Resolución'], ['asesor', 'Asesor'], ['voz', 'Voces'], ['calidad', 'Calidad']];
@@ -130,9 +130,9 @@ function cargarComentarios() {
     const cm = window.COMENTARIOS, ix = Object.fromEntries(cm.campos.map((c, i) => [c, i]));
     C = cm.filas.map(f => ({r: f, grupo: f[ix.grupo], q8: f[ix.q8], q6: f[ix.q6], q2: f[ix.q2], q9: f[ix.q9], preg: D.cod_preguntas[f[ix.pregunta]], texto: f[ix.texto]}));
     delete window.COMENTARIOS;
-    pintarTab(); if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
+    conComentarios(); if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
   };
-  s.onerror = () => { C = []; pintarTab(); };
+  s.onerror = () => { C = []; conComentarios(); };
   document.body.appendChild(s);
 }
 // Lentes: qué comentarios ilustran cada lado de cada indicador
@@ -175,14 +175,19 @@ function carrusel(id, lentes) {
   const ej = ejemplos(e.lente);
   const cards = ej == null ? Array(5).fill('<div class="esqueleto" aria-hidden="true"></div>').join('') :
     ej.items.length ? ej.items.map(v => tarjeta(v)).join('') : '<p class="vacio">Sin comentarios con estos filtros</p>';
-  return `<section class="panel" data-car="${id}"><header><h2>Lo que dicen los clientes <span class="nota" style="font-weight:600;margin-left:6px" ${tipAttr('Ejemplos variados por marcación, con los filtros actuales. Clic en una tarjeta para leerla completa. Datos personales tapados.')}>${ej ? `${f0(ej.total)} comentarios · ${ej.items.length} ejemplos` : 'cargando…'}</span></h2>
+  return `<section class="panel" data-car="${id}" data-lentes="${lentes.join('|')}"><header><h2>Lo que dicen los clientes <span class="nota" style="font-weight:600;margin-left:6px" ${tipAttr('Ejemplos variados por marcación, con los filtros actuales. Clic en una tarjeta para leerla completa. Datos personales tapados.')}>${ej ? `${f0(ej.total)} comentarios · ${ej.items.length} ejemplos` : 'cargando…'}</span></h2>
       <div class="seg" role="group" aria-label="Tipo de comentario">${lentes.map(l => `<button type="button" data-lente="${l}" aria-pressed="${e.lente === l}">${LENTES[l].t}</button>`).join('')}</div>
 </header>
     <div class="voces"><button type="button" class="flecha izq" aria-label="Anteriores">${svgI('izq')}</button><div class="riel-v">${cards}</div><button type="button" class="flecha der" aria-label="Siguientes">${svgI('der')}</button></div></section>`;
 }
+// Repinta solo los carruseles (al llegar comentarios.js o al cambiar de lente), sin volver a animar el resto
+function repintarCarruseles(raiz) {
+  raiz.querySelectorAll('[data-car]').forEach(s => { s.outerHTML = carrusel(s.dataset.car, s.dataset.lentes.split('|')); });
+  montarCarrusel(raiz);
+}
 function montarCarrusel(raiz) {
   raiz.querySelectorAll('[data-car]').forEach(p => {
-    p.querySelectorAll('[data-lente]').forEach(b => b.onclick = () => { carEst[p.dataset.car].lente = b.dataset.lente; pintarTab(); });
+    p.querySelectorAll('[data-lente]').forEach(b => b.onclick = () => { carEst[p.dataset.car].lente = b.dataset.lente; repintarCarruseles(p.parentNode); });
     const riel = p.querySelector('.riel-v');
     p.querySelector('.izq').onclick = () => riel.scrollBy({left: -riel.clientWidth * .9, behavior: 'smooth'});
     p.querySelector('.der').onclick = () => riel.scrollBy({left: riel.clientWidth * .9, behavior: 'smooth'});
@@ -202,6 +207,9 @@ document.addEventListener('mousemove', e => { const t = e.target.closest?.('[dat
 document.addEventListener('focusin', e => { const t = e.target.closest?.('[data-tip]'); if (t) { const b = t.getBoundingClientRect(); verTip(t.dataset.tip, b.left, b.bottom); } });
 document.addEventListener('focusout', () => tip.classList.remove('ver'));
 const tipAttr = html => `data-tip="${esc(html)}"`;
+// Gráficos animados (graficos.js; anima con vendor/motion.js si está, si no queda el estado final)
+const G = window.GRAF;
+G.config({tip: tipAttr});
 const tipInd = (k, r, extra = '') => r == null ? 'Sin respuestas válidas' :
   `<div class="t">${IND[k].nombre}: ${fmt(k, r)}</div>n = ${f0(r.n)} · IC 95 % ±${f1(r.ic)} ${k === 'nps' ? 'pts' : 'pp'}${r.n < NMIN ? '<br><b>Muestra baja</b>: lectura indicativa' : ''}${extra}`;
 const bajo = r => r && r.n < NMIN ? ' <span class="bajo">muestra baja</span>' : '';
@@ -274,20 +282,18 @@ function delta(k, act, ant, etq) {
   const d = act.v - ant.v, c = Math.abs(d) < .05 ? 'igual' : d > 0 ? 'mejora' : 'empeora';
   return `<span class="delta ${c}" ${tipAttr(`${etq}: ${fmt(k, ant)} · n ${f0(ant.n)}`)}>${c === 'igual' ? '■' : d > 0 ? '▲' : '▼'} ${fpp(d)} ${k === 'nps' ? 'pts' : 'pp'}<span class="sr"> ${c === 'mejora' ? 'mejora' : c === 'empeora' ? 'empeora' : 'igual'}</span></span><span class="nota">vs ${etq}</span>`;
 }
+// Spark de área por estudio (color de serie), con los meses elegidos marcados
 function spark(k) {
-  const lines = ests().map(e => ({e, pts: serie(k, 'mes', e)})).filter(s => s.pts.length > 1);
-  if (!lines.length) return '';
-  const W = 200, H = 34, all = lines.flatMap(s => s.pts.map(p => p.r.v)), lo = Math.min(...all), hi = Math.max(...all), rg = hi - lo || 1, n = PERIODOS.length;
-  const X = i => 3 + (W - 6) * i / Math.max(1, n - 1);
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${st.meses.map(m => `<line x1="${X(m)}" x2="${X(m)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>`).join('')}${lines.map(s =>
-    `<polyline fill="none" stroke="${CE[EST[s.e]]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" points="${s.pts.map(p => X(p.x) + ',' + (3 + (H - 6) * (1 - (p.r.v - lo) / rg))).join(' ')}"/>`).join('')}</svg>`;
+  const series = ests().map(e => ({color: CE[EST[e]], pts: serie(k, 'mes', e).map(p => ({i: p.x, v: p.r.v}))})).filter(s => s.pts.length > 1);
+  return series.length ? G.spark(series, PERIODOS.length, st.meses, {alto: 40}) : '';
 }
-function pesa(k, rs) {
+// Pesa: los dos estudios sobre un riel con la rampa (rojo = peor, verde = mejor); los puntos entran deslizándose
+function pesa(k, rs, f = 0) {
   const {min, max} = IND[k], X = v => (v - min) / (max - min) * 100, ok = rs.filter(Boolean);
-  let s = `<div class="pesa" role="img" aria-label="${IND[k].nombre}: ${EST.map((e, i) => e + ' ' + fmt(k, rs[i])).join(', ')}"><span class="riel"></span>`;
+  let s = `<div class="pesa" role="img" aria-label="${IND[k].nombre}: ${EST.map((e, i) => e + ' ' + fmt(k, rs[i])).join(', ')}"><span class="riel" style="${G.rampaCss(.5)}"></span>`;
   if (min < 0) s += `<span class="cero" style="left:${X(0)}%"></span>`;
-  if (ok.length === 2) s += `<span class="une" style="left:${Math.min(X(rs[0].v), X(rs[1].v))}%;width:${Math.abs(X(rs[0].v) - X(rs[1].v))}%"></span>`;
-  rs.forEach((r, i) => { if (r) s += `<span class="pt${r.n < NMIN ? ' hueco' : ''}" style="left:${X(r.v)}%;background:${CE[EST[i]]};${r.n < NMIN ? 'border-color:' + CE[EST[i]] : ''}" ${tipAttr(tipInd(k, r, `<br>${EST[i]}`))}></span>`; });
+  if (ok.length === 2) s += `<span class="une" style="left:${Math.min(X(rs[0].v), X(rs[1].v))}%;width:${Math.abs(X(rs[0].v) - X(rs[1].v))}%" data-an="aparece" data-i="${f * 2 + 6}"></span>`;
+  rs.forEach((r, i) => { if (r) s += `<span class="pt${r.n < NMIN ? ' hueco' : ''}" style="left:${X(r.v)}%;background:${CE[EST[i]]};${r.n < NMIN ? 'border-color:' + CE[EST[i]] : ''}" data-an="desliza" data-desde="0%" data-i="${f * 2 + i}" ${tipAttr(tipInd(k, r, `<br>${EST[i]}`))}></span>`; });
   return s + '</div>';
 }
 // Gráfico de líneas: se dibuja después de insertar el HTML, con el tamaño real del contenedor
@@ -307,59 +313,57 @@ function dibujarLineas(raiz) {
     lo = Math.max(IND[k].min, Math.floor((lo - pad) / 10) * 10); hi = Math.min(IND[k].max, Math.ceil((hi + pad) / 10) * 10);
     const X = i => xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 52))));
-    let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
+    const id = 'gl-' + el.id, base = H - B, quieto = document.documentElement.hasAttribute('data-sin-anim');
+    // Puntos, áreas y etiqueta entran con animaciones CSS (l-pop / l-ap): Motion escribe opacity y transform como
+    // atributos en SVG y el estado inicial en línea de GRAF.animar los dejaría ocultos (ver nota de la librería)
+    // Degradados: franja del eje Y con la rampa (qué tan buena es cada altura) y área bajo cada serie
+    let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" data-guia${quieto ? ' class="quieto"' : ''}><defs>${G.gradY(id + '-y', lo, hi, IND[k].min, IND[k].max)}${S.map((sr, i) => G.gradArea(`${id}-a${i}`, CE[sr.e])).join('')}</defs>`;
     if (modo === 'mes') st.meses.filter(m => xs.includes(m)).forEach(m => { s += `<rect x="${X(xs.indexOf(m)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`; });
-    for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
+    for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 10}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
+    s += `<rect class="g-rampa-y" x="${L - 5}" y="${Y(hi)}" width="3.5" height="${Y(lo) - Y(hi)}" rx="1.75" fill="url(#${id}-y)"/>`;
     if (lo < 0 && hi > 0) s += `<line class="eje" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
     xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && st.meses.includes(x) ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
-    for (const {e, pts} of S) {
+    s += `<line class="g-guia-l" x1="0" x2="0" y1="${T - 6}" y2="${base}"/>`;
+    S.forEach(({e, pts}, si) => {
       const c = CE[e], pos = pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p]);
-      s += `<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${pos.map(q => q[0] + ',' + q[1]).join(' ')}"/>`;
-      s += pos.map(([x, y, p]) => `<circle cx="${x}" cy="${y}" r="3.6" fill="${p.r.n < NMIN ? 'var(--panel)' : c}" stroke="${p.r.n < NMIN ? c : 'var(--panel)'}" stroke-width="2"/>`).join('');
-      const u = pos[pos.length - 1]; s += `<text class="val" x="${u[0] + 8}" y="${u[1] + 4}">${fmt(k, u[2].r)}</text>`;
-    }
+      const d = pos.map((q, j) => (j ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+      if (pos.length > 1) s += `<path d="${d} L${pos[pos.length - 1][0].toFixed(1)} ${base} L${pos[0][0].toFixed(1)} ${base} Z" class="l-ap" style="fill:url(#${id}-a${si});animation-delay:${.55 + si * .1}s"/>`;
+      s += `<path d="${d}" pathLength="1" fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" data-an="traza" data-i="${si * 2}"/>`;
+      // Cada punto aparece cuando la línea llega a él (la traza dura ~1,2 s)
+      s += pos.map(([x, y, p], j) => `<circle class="g-pt l-pop" data-x="${p.x}" cx="${x}" cy="${y}" r="3.6" fill="${p.r.n < NMIN ? 'var(--panel)' : c}" stroke="${p.r.n < NMIN ? c : 'var(--panel)'}" stroke-width="2" style="animation-delay:${(.15 + si * .1 + 1.1 * j / Math.max(1, pos.length - 1)).toFixed(2)}s"/>`).join('');
+      const u = pos[pos.length - 1]; s += `<text class="val l-ap" x="${u[0] + 8}" y="${u[1] + 4}" style="animation-delay:${1.3 + si * .1}s">${fmt(k, u[2].r)}</text>`;
+    });
     xs.forEach((x, i) => {
       const x0 = i ? (X(i - 1) + X(i)) / 2 : L, x1 = i < xs.length - 1 ? (X(i) + X(i + 1)) / 2 : W - R;
       const t = S.map(({e, pts}) => { const p = pts.find(p => p.x === x); return p ? `<i style="background:${CE[e]}"></i>${e}: <b>${fmt(k, p.r)}</b> · n ${f0(p.r.n)}${p.r.n < NMIN ? ' (muestra baja)' : ''}` : ''; }).filter(Boolean).join('<br>');
-      s += `<rect class="hit" x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" ${tipAttr(`<div class="t">${esc(etq(x))}</div>${t}`)}/>`;
+      s += `<rect class="hit" data-x="${x}" data-cx="${X(i)}" x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" ${tipAttr(`<div class="t">${esc(etq(x))}</div>${t}`)}/>`;
     });
     el.innerHTML = s + '</svg>';
+    G.guia(el);
     if (tabla) tabla.innerHTML = `<table class="rk"><thead><tr><th>${modo === 'mes' ? 'Mes' : 'Semana'}</th>${S.map(s => `<th class="num">${s.e}</th><th class="num">n</th>`).join('')}</tr></thead><tbody>${xs.map(x => `<tr><td>${esc(etq(x))}</td>${S.map(s => { const p = s.pts.find(p => p.x === x); return `<td class="num">${p ? fmt(k, p.r) : '—'}</td><td class="num">${p ? f0(p.r.n) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`;
   });
 }
-const Q6C = ['var(--d-2)', 'var(--d-1)', 'var(--d0)', 'var(--d1)', 'var(--d2)'];
-function divergente(grupos) {
-  const P = grupos.map(g => { const t = [1, 2, 3, 4, 5].map(i => g.a['q6_' + i]), n = t.reduce((x, y) => x + y, 0); return {...g, t, n, p: t.map(x => n ? x / n * 100 : 0)}; }).filter(g => g.n);
-  if (!P.length) return '<p class="vacio">Sin datos</p>';
-  const izq = Math.max(...P.map(g => g.p[0] + g.p[1] + g.p[2] / 2)), der = Math.max(...P.map(g => g.p[4] + g.p[3] + g.p[2] / 2)), tot = izq + der;
-  return `<div class="leyenda">${D.q6.map((q, i) => `<span><i style="background:${Q6C[i]}"></i>${q}</span>`).join('')}</div>` + P.map(g => {
-    const off = (izq - (g.p[0] + g.p[1] + g.p[2] / 2)) / tot * 100;
-    return `<div class="apil"><div class="et">${esc(g.nombre)}<small>n ${f0(g.n)}</small></div><div class="tira" style="padding-left:${off}%" role="img" aria-label="${esc(g.nombre)}: ${D.q6.map((q, i) => q + ' ' + f1(g.p[i]) + ' %').join(', ')}">${g.p.map((p, i) => `<span class="${i === 2 ? 'osc' : ''}" style="width:${p / tot * 100}%;background:${Q6C[i]}" ${tipAttr(`<div class="t">${esc(g.nombre)} · ${D.q6[i]}</div>${f1(p)} % (${f0(g.t[i])} de ${f0(g.n)})`)}>${p / tot * 100 > 7 ? f0(p) + '%' : ''}</span>`).join('')}<span class="centro" style="left:${izq / tot * 100}%"></span></div><div class="fin">${fmt('ces', IND.ces.calc(g.a))}<small>CES</small></div></div>`;
-  }).join('');
-}
-function apilada(grupos, partes, k) {
-  return `<div class="leyenda">${partes.map(p => `<span><i style="background:${p.c}"></i>${p.t}</span>`).join('')}</div>` + grupos.filter(g => g.a.n).map(g => {
-    const c = partes.map(p => p.v(g.a)), n = c.reduce((x, y) => x + y, 0) || 1;
-    return `<div class="apil"><div class="et">${esc(g.nombre)}<small>n ${f0(n)}</small></div><div class="tira">${c.map((x, i) => `<span class="${partes[i].osc ? 'osc' : ''}" style="width:${x / n * 100}%;background:${partes[i].c}" ${tipAttr(`<div class="t">${esc(g.nombre)} · ${partes[i].t}</div>${f1(x / n * 100)} % (${f0(x)})`)}>${x / n > .07 ? f0(x / n * 100) + '%' : ''}</span>`).join('')}</div><div class="fin">${fmt(k, IND[k].calc(g.a))}<small>${IND[k].corto}</small></div></div>`;
-  }).join('');
-}
-const PARTES_NPS = [{t: 'Detractores 0–6', c: 'var(--d-2)', v: a => a.det}, {t: 'Pasivos 7–8', c: 'var(--d0)', osc: true, v: a => a.n - a.det - a.prom}, {t: 'Promotores 9–10', c: 'var(--d2)', v: a => a.prom}];
-const PARTES_FUN = [{t: 'No funciona', c: 'var(--d-2)', v: a => a.q8_no}, {t: 'Funciona', c: 'var(--d2)', v: a => a.q8_si}];
-function barras(items, base, color) {
-  if (!items.length || !base) return '<p class="vacio">Sin datos</p>';
-  const max = Math.max(...items.map(x => x.c));
-  return `<div class="barras">${items.map(x => `<div class="barra" ${tipAttr(`<div class="t">${esc(x.nombre)}</div>${f0(x.c)} de ${f0(base)} (${f1(x.c / base * 100)} %)`)}><span class="et">${esc(x.nombre)}</span><span class="p"><b style="width:${x.c / max * 100}%;background:${color(x)}"></b></span><span class="num">${f1(x.c / base * 100)} %<small>${f0(x.c)}</small></span></div>`).join('')}</div>`;
-}
+// Distribuciones (graficos.js): la rampa va de la opción peor (rojo intenso) a la mejor (verde sobrio)
+// Q6 facilidad: barras divergentes centradas en «Ni fácil ni difícil»
+const divergente = grupos => G.divergente(grupos.map(g => ({nombre: g.nombre, cuentas: [1, 2, 3, 4, 5].map(i => g.a['q6_' + i]),
+  fin: `${fmt('ces', IND.ces.calc(g.a))}<small>CES</small>`})), D.q6);
+// NPS: waffle de 100 cuadritos (detractores, pasivos, promotores)
+const wafNps = grupos => G.waffle(grupos.filter(g => g.a.n).map(g => ({nombre: g.nombre, cuentas: [g.a.det, g.a.n - g.a.det - g.a.prom, g.a.prom],
+  fin: `${fmt('nps', IND.nps.calc(g.a))}<small>NPS</small>`})), ['Detractores 0–6', 'Pasivos 7–8', 'Promotores 9–10']);
+// Q8 funcionando: donas (no funciona / funciona), en el centro el % que funciona
+// El centro ya es el indicador (con un decimal): no se repite debajo
+const donasFun = grupos => G.donas(grupos.map(g => ({nombre: g.nombre, cuentas: [g.a.q8_no, g.a.q8_si]})), ['No funciona', 'Funciona'], {centro: 'funciona', dec: 1});
 function temas(mapa, nombres, idx) {
   const c = new Map(); for (const i of idx) for (const [t, n] of mapa.get(i) || []) c.set(t, (c.get(t) || 0) + n);
   const o = [...c].map(([t, n]) => ({nombre: nombres[t], c: n})).sort((a, b) => b.c - a.c);
   if (o.length <= 9) return o;
-  const r = o.slice(8); return [...o.slice(0, 8), {nombre: `Otros ${r.length} temas`, c: r.reduce((x, y) => x + y.c, 0)}];
+  const r = o.slice(8); return [...o.slice(0, 8), {nombre: `Otros ${r.length} temas`, c: r.reduce((x, y) => x + y.c, 0), cod: true}];
 }
 const DIM_RK = [['marcacion', 'Marcación'], ['aliado', 'Aliado'], ['region', 'Región'], ['red', 'Red'], ['operacion', 'Operación'], ['estrato', 'Estrato']];
 const rkEst = {};
 function ranking(id, k, dims = DIM_RK, tope = 10) {
-  const e = rkEst[id] ||= {dim: dims[0][0], orden: 'n', todos: false};
+  if (!rkEst[id]) rkEst[id] = {dim: dims[0][0], orden: 'n', todos: false};
+  const e = rkEst[id]; e.args = [k, dims, tope];
   const idx = filas(), tot = IND[k].calc(sumar(idx));
   const g = porDim(idx, e.dim).map(x => ({...x, r: IND[k].calc(x.a)})).filter(x => x.r);
   const val = x => x.r.n < NMIN ? (e.orden === 'peor' ? 1e9 : -1e9) : x.r.v;
@@ -370,17 +374,24 @@ function ranking(id, k, dims = DIM_RK, tope = 10) {
     <div class="herr"><div class="seg" role="group" aria-label="Abrir por">${dims.map(([d, t]) => `<button type="button" data-dim="${d}" aria-pressed="${e.dim === d}">${t}</button>`).join('')}</div>
     <div class="seg" role="group" aria-label="Ordenar"><button type="button" data-ord="n" aria-pressed="${e.orden === 'n'}">Volumen</button><button type="button" data-ord="peor" aria-pressed="${e.orden === 'peor'}">Peor</button><button type="button" data-ord="mejor" aria-pressed="${e.orden === 'mejor'}">Mejor</button></div></div></header>
     <div class="tw"><table class="rk"><caption class="sr">${IND[k].nombre} por ${nomDim}</caption><thead><tr><th>${nomDim}</th><th class="num">n</th><th class="num">${IND[k].corto}</th><th><span aria-hidden="true">│ total ${fmt(k, tot)}</span><span class="sr">barra</span></th><th class="num">vs total</th></tr></thead><tbody>
-    ${vis.map(x => { const d = tot ? x.r.v - tot.v : 0, b = min < 0 ? `left:${Math.min(X(0), X(x.r.v))}%;width:${Math.abs(X(x.r.v) - X(0))}%` : `left:0;width:${X(x.r.v)}%`;
-      return `<tr class="${x.r.n < NMIN ? 'poca' : ''}${fil ? ' clic' : ''}${fil && st[e.dim].has(x.v) ? ' sel' : ''}" ${fil ? `tabindex="0" data-v="${x.v}"` : ''}><td class="nom">${esc(x.nombre)}${bajo(x.r)}</td><td class="num">${f0(x.r.n)}</td><td class="num"><b>${fmt(k, x.r)}</b></td><td class="bar"><div class="mini" ${tipAttr(tipInd(k, x.r))}><b style="${b}"></b>${tot ? `<span class="ref" style="left:${X(tot.v)}%"></span>` : ''}</div></td><td class="num"><span class="dif ${x.r.n < NMIN || Math.abs(d) < .05 ? '' : d > 0 ? 'mejora' : 'empeora'}">${fpp(d)}</span></td></tr>`; }).join('') || '<tr><td colspan="5" class="vacio">Sin datos</td></tr>'}
+    ${vis.map((x, i) => { const d = tot ? x.r.v - tot.v : 0, b = min < 0 ? `left:${Math.min(X(0), X(x.r.v))}%;width:${Math.abs(X(x.r.v) - X(0))}%` : `left:0;width:${X(x.r.v)}%`;
+      // Color: diferencia contra el total (rojo = peor, verde = mejor); gris si la muestra es baja (CSS de .poca)
+      const col = x.r.n < NMIN ? '' : `;background:${G.tonoDif(d, min < 0 ? 40 : 20)}`, ori = min < 0 && x.r.v < 0 ? 'r' : 'l';
+      return `<tr class="${x.r.n < NMIN ? 'poca' : ''}${fil ? ' clic' : ''}${fil && st[e.dim].has(x.v) ? ' sel' : ''}" ${fil ? `tabindex="0" data-v="${x.v}"` : ''}><td class="nom">${esc(x.nombre)}${bajo(x.r)}</td><td class="num">${f0(x.r.n)}</td><td class="num"><b>${fmt(k, x.r)}</b></td><td class="bar"><div class="mini" ${tipAttr(tipInd(k, x.r))}><b style="${b}${col}" data-an="barra" data-o="${ori}" data-i="${i}"></b>${tot ? `<span class="ref" style="left:${X(tot.v)}%"></span>` : ''}</div></td><td class="num"><span class="dif ${x.r.n < NMIN || Math.abs(d) < .05 ? '' : d > 0 ? 'mejora' : 'empeora'}">${fpp(d)}</span></td></tr>`; }).join('') || '<tr><td colspan="5" class="vacio">Sin datos</td></tr>'}
     </tbody></table></div>${g.length > tope ? `<button type="button" class="mas">${e.todos ? 'Ver menos' : `Ver los ${g.length}`}</button>` : ''}
     <p class="nota" style="margin:6px 0 0">${fil ? 'Clic en una fila para filtrar todo el tablero. ' : ''}Gris = menos de ${NMIN} encuestas (no se ordena por valor).</p></section>`;
+}
+// Cambiar dimensión, orden o «ver todos» repinta y anima solo ese ranking
+function repintarRanking(p) {
+  const e = rkEst[p.dataset.rk], nuevo = reemplazar(p, ranking(p.dataset.rk, e.args[0], e.args[1], e.args[2]));
+  montarRanking(nuevo.parentNode); G.animar(nuevo, {inmediato: true});
 }
 function montarRanking(raiz) {
   raiz.querySelectorAll('[data-rk]').forEach(p => {
     const e = rkEst[p.dataset.rk];
-    p.querySelectorAll('[data-dim]').forEach(b => b.onclick = () => { e.dim = b.dataset.dim; e.todos = false; pintarTab(); });
-    p.querySelectorAll('[data-ord]').forEach(b => b.onclick = () => { e.orden = b.dataset.ord; pintarTab(); });
-    p.querySelector('.mas')?.addEventListener('click', () => { e.todos = !e.todos; pintarTab(); });
+    p.querySelectorAll('[data-dim]').forEach(b => b.onclick = () => { e.dim = b.dataset.dim; e.todos = false; repintarRanking(p); });
+    p.querySelectorAll('[data-ord]').forEach(b => b.onclick = () => { e.orden = b.dataset.ord; repintarRanking(p); });
+    const mas = p.querySelector('.mas'); if (mas) mas.onclick = () => { e.todos = !e.todos; repintarRanking(p); };
     p.querySelectorAll('tr.clic').forEach(tr => { const f = () => alternar(e.dim, +tr.dataset.v); tr.onclick = f; tr.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); } }; });
   });
 }
@@ -422,14 +433,14 @@ function calcDolores(idx) {
   return {tot, alguno: todas.find(x => x.k === 'alguno'), dol: todas.filter(x => x.k !== 'alguno')};
 }
 // Pista de −100 a 100 (NPS) o de 0 a 100 (CES) con los dos puntos: con el dolor y sin él
-function pista(con, sin, min, ref, suf, tip) {
+function pista(con, sin, min, ref, suf, tip, f = 0) {
   if (con == null || sin == null) return '<div class="pz vacia">—</div>';
   const X = v => (v - min) / (100 - min) * 100, lo = Math.min(con, sin), hi = Math.max(con, sin);
   const etq = v => `${f0(v)}${suf}`;
   return `<div class="pz" ${tipAttr(tip)}><div class="riel">${min < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
     ${ref != null ? `<span class="ref" style="left:${X(ref)}%"></span>` : ''}
-    <span class="tramo" style="left:${X(lo)}%;width:${X(hi) - X(lo)}%"></span>
-    <span class="pt sin" style="left:${X(sin)}%"></span><span class="pt con" style="left:${X(con)}%"></span>
+    <span class="tramo" style="left:${X(lo)}%;width:${X(hi) - X(lo)}%" data-an="ancho" data-i="${f}"></span>
+    <span class="pt sin" style="left:${X(sin)}%" data-an="pop" data-i="${f + 2}"></span><span class="pt con" style="left:${X(con)}%" data-an="pop" data-i="${f}"></span>
     <span class="lbl izq" style="right:${100 - X(lo)}%">${etq(lo)}</span><span class="lbl der" style="left:${X(hi)}%">${etq(hi)}</span></div></div>`;
 }
 function vDolores() {
@@ -441,14 +452,14 @@ function vDolores() {
   const techo = alguno && alguno.sin != null && alguno.nSin >= NMIN ? alguno.sin : null;
   const cab = tot.nps == null ? '' : `
     <div class="dol-hero">
-      <div class="dh-num"><span>NPS hoy</span><b>${f1(tot.nps)}</b></div>
+      <div class="dh-num"><span>NPS hoy</span><b>${G.cuenta(tot.nps, 1)}</b></div>
       <div class="dh-pista" ${tipAttr(`<div class="t">Techo teórico</div>Las ${f0(alguno.nSin)} encuestas que no mencionan ningún dolor dan un NPS de ${techo == null ? '—' : f1(techo)}. Si todos calificaran así, el NPS subiría ${techo == null ? '—' : f1(techo - tot.nps)} pts.`)}>
         <div class="riel"><span class="cero" style="left:50%"></span>
-          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.nps, techo))}%;width:${Math.abs(X(techo) - X(tot.nps))}%"></span><span class="pt fin" style="left:${X(techo)}%"></span>`}
+          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.nps, techo))}%;width:${Math.abs(X(techo) - X(tot.nps))}%" data-an="ancho" data-i="2"></span><span class="pt fin" style="left:${X(techo)}%" data-an="desliza" data-desde="${X(tot.nps)}%" data-i="2"></span>`}
           <span class="pt hoy" style="left:${X(tot.nps)}%"></span></div>
         <div class="escala"><span>−100</span><span>0</span><span>100</span></div></div>
-      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : f1(techo)}</b></div>
-      <div class="dh-pts"><b>${techo == null ? '—' : fpp(techo - tot.nps)}</b><span>pts de NPS en juego</span></div>
+      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : G.cuenta(techo, 1, {desde: tot.nps})}</b></div>
+      <div class="dh-pts"><b>${techo == null ? '—' : G.cuenta(techo - tot.nps, 1, {signo: true})}</b><span>pts de NPS en juego</span></div>
       <p class="dh-pie">${f1(alguno.pct)} % de las encuestas (${f0(alguno.n)} de ${f0(tot.n)}) menciona al menos un dolor. Su NPS es ${f1(alguno.con)}${alguno.cesCon != null ? ` y su CES ${f1(alguno.cesCon)} %` : ''}.</p>
     </div>`;
   const filasH = orden.map((x, i) => {
@@ -459,10 +470,10 @@ function vDolores() {
     return `<li class="dol${poca ? ' poca' : ''}">
       <span class="rk">${String(i + 1).padStart(2, '0')}</span>
       <div class="qu"><span class="mom">${DL.momentos[x.k]}</span><b>${esc(tit)}</b><q>${esc(cita)}</q></div>
-      <div class="vive"><b>${f1(x.pct)} %</b><span>${f0(x.n)} encuestas</span>${poca ? '<span class="bajo">muestra baja</span>' : ''}</div>
-      ${pista(x.con, x.sin, -100, tot.nps, '', tipN)}
-      ${pista(x.cesCon, x.cesSin, 0, tot.ces, ' %', tipC)}
-      <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : fpp(x.pts)}</b><small>pts</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%"></i></span></div>
+      <div class="vive"><b>${G.cuenta(x.pct, 1)} %</b><span>${f0(x.n)} encuestas</span>${poca ? '<span class="bajo">muestra baja</span>' : ''}</div>
+      ${pista(x.con, x.sin, -100, tot.nps, '', tipN, i)}
+      ${pista(x.cesCon, x.cesSin, 0, tot.ces, ' %', tipC, i + 1)}
+      <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : G.cuenta(x.pts, 1, {signo: true})}</b><small>pts</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%" data-an="ancho" data-i="${i + 3}"></i></span></div>
     </li>`;
   }).join('');
   return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
@@ -501,30 +512,50 @@ function vResumen(p) {
   const porE = EST.map((_, e) => sumar(filas({estudio: e})));
   const kpis = KS.map((k, i) => {
     const r = IND[k].calc(a), pr = aAnt ? IND[k].calc(aAnt) : null;
+    // Anillo: dónde cae el valor en su escala (NPS −100 a 100; el resto 0 a 100 %), en la rampa rojo → verde
     return `<article class="kpi${i === 0 ? ' estrella' : ''}">${i === 0 ? '<span class="glow"></span>' : ''}
+      ${r ? G.anillo(r.v, IND[k].min, IND[k].max, {tip: tipInd(k, r), tam: i === 0 ? 64 : 56, grosor: i === 0 ? 7 : 6}) : ''}
       <div class="et">${i === 0 ? IND[k].nombre : IND[k].corto} <span class="info" tabindex="0" ${tipAttr(esc(IND[k].def))}>?</span></div>
-      <div class="v" ${tipAttr(tipInd(k, r))}>${fmtGrande(k, r)}</div>
+      <div class="v" ${tipAttr(tipInd(k, r))}>${r ? `${G.cuenta(r.v, 1)}<small>${k === 'nps' ? 'pts' : '%'}</small>` : '—'}</div>
       <div class="pie">${delta(k, r, pr, etA)}</div>
       ${spark(k)}
       <div class="pie"><span>n ${r ? f0(r.n) : 0}${r ? ` · ±${f1(r.ic)}` : ''}${k === 'nps' ? '' : corrTxt(k, a)}</span>${bajo(r)}<button type="button" class="ver" data-cajon="${k}" aria-label="Ver detalle y comentarios de ${IND[k].nombre}">Voces ›</button></div></article>`;
   }).join('');
-  const vs = KS.map(k => { const rs = porE.map(x => IND[k].calc(x)), br = rs[0] && rs[1] ? rs[0].v - rs[1].v : null;
-    return `<div class="f"><div class="n">${IND[k].corto}<small>${rs.map(r => fmt(k, r)).join(' · ')}</small></div>${pesa(k, rs)}<div class="b">${br == null ? '—' : fpp(br)}<small>Sop − FM</small></div></div>`; }).join('');
+  const vs = KS.map((k, f) => { const rs = porE.map(x => IND[k].calc(x)), br = rs[0] && rs[1] ? rs[0].v - rs[1].v : null;
+    return `<div class="f"><div class="n">${IND[k].corto}<small>${rs.map(r => fmt(k, r)).join(' · ')}</small></div>${pesa(k, rs, f)}<div class="b">${br == null ? '—' : G.cuenta(br, 1, {signo: true})}<small>Sop − FM</small></div></div>`; }).join('');
   p.innerHTML = `
     <section class="kpis" aria-label="Indicadores de ${etqMeses(st.meses)}">${kpis}</section>
     <div class="g g-2-1" style="min-height:0">
-      <section class="panel"><header><h2>${IND[st.evo].nombre} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
-        <div class="herr"><div class="seg" role="group" aria-label="Indicador" id="evo-k">${KS.map(k => `<button type="button" data-k="${k}" aria-pressed="${st.evo === k}">${IND[k].corto}</button>`).join('')}</div>
-        ${PERIODOS.length > 1 ? `<div class="seg" role="group" aria-label="Agrupar" id="evo-m"><button type="button" data-m="mes" aria-pressed="${st.modo === 'mes'}">Mes</button><button type="button" data-m="semana" aria-pressed="${st.modo === 'semana'}">Semana</button></div>` : ''}</div>
-        <div class="leyenda" style="flex-basis:100%">${ests().map(e => `<span><i class="l" style="background:${CE[EST[e]]}"></i>${EST[e]}</span>`).join('')}<span class="nota">Punto hueco = menos de ${NMIN} encuestas</span>${tablaPH('evo')}</div></header>
-        ${lineasPH(st.evo, st.modo, 'evo')}</section>
+      ${panelEvo()}
       <section class="panel"><header><h2 ${tipAttr('Mismo mes y filtros, sin el filtro de estudio. Escala: NPS de −100 a 100; el resto de 0 a 100 %.')}>Soporte vs Falla masiva <span class="info">?</span></h2><div class="leyenda">${EST.map(e => `<span><i style="background:${CE[e]}"></i>${e === 'Falla masiva' ? 'FM' : e}</span>`).join('')}</div></header><div class="vs">${vs}</div></section>
     </div>
     ${vDolores()}
     ${carrusel('res', ['det', 'pro', 'dif', 'nof', 'amal'])}`;
-  p.querySelectorAll('#dol-r button').forEach(b => b.onclick = () => { dolEst.rango = b.dataset.r; pintarTab(); });
-  p.querySelectorAll('#evo-k button').forEach(b => b.onclick = () => { st.evo = b.dataset.k; pintarTab(); });
-  p.querySelectorAll('#evo-m button').forEach(b => b.onclick = () => { st.modo = b.dataset.m; pintarTab(); });
+  montarDolores(p); montarEvo(p);
+}
+// Evolución: cambiar indicador o agrupación repinta y anima solo este panel
+function panelEvo() {
+  return `<section class="panel" id="evo-p"><header><h2>${IND[st.evo].nombre} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
+        <div class="herr"><div class="seg" role="group" aria-label="Indicador" id="evo-k">${KS.map(k => `<button type="button" data-k="${k}" aria-pressed="${st.evo === k}">${IND[k].corto}</button>`).join('')}</div>
+        ${PERIODOS.length > 1 ? `<div class="seg" role="group" aria-label="Agrupar" id="evo-m"><button type="button" data-m="mes" aria-pressed="${st.modo === 'mes'}">Mes</button><button type="button" data-m="semana" aria-pressed="${st.modo === 'semana'}">Semana</button></div>` : ''}</div>
+        <div class="leyenda" style="flex-basis:100%">${ests().map(e => `<span><i class="l" style="background:${CE[EST[e]]}"></i>${EST[e]}</span>`).join('')}<span class="nota">Punto hueco = menos de ${NMIN} encuestas</span>${tablaPH('evo')}</div></header>
+        ${lineasPH(st.evo, st.modo, 'evo')}</section>`;
+}
+// Reemplaza un panel por HTML nuevo y devuelve el nodo insertado
+function reemplazar(viejo, html) { const tmp = document.createElement('div'); tmp.innerHTML = html; const n = tmp.firstElementChild; viejo.replaceWith(n); return n; }
+function repintarEvo() {
+  const n = reemplazar(document.getElementById('evo-p'), panelEvo());
+  montarEvo(n); dibujarLineas(n); G.animar(n, {inmediato: true});
+}
+function montarEvo(raiz) {
+  raiz.querySelectorAll('#evo-k button').forEach(b => b.onclick = () => { st.evo = b.dataset.k; repintarEvo(); });
+  raiz.querySelectorAll('#evo-m button').forEach(b => b.onclick = () => { st.modo = b.dataset.m; repintarEvo(); });
+}
+function montarDolores(raiz) {
+  raiz.querySelectorAll('#dol-r button').forEach(b => b.onclick = () => {
+    dolEst.rango = b.dataset.r;
+    const n = reemplazar(document.getElementById('dolores'), vDolores()); montarDolores(n); G.animar(n, {inmediato: true});
+  });
 }
 function vFacilidad(p) {
   const idx = filas(), a = sumar(idx);
@@ -532,27 +563,30 @@ function vFacilidad(p) {
   p.innerHTML = `
     <section class="panel"><header><h2>¿Qué tan fácil fue contactar a un asesor?</h2><p class="sub">Q6 · centrado en «Ni fácil ni difícil»: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr)}</section>
     ${carrusel('fac', ['dif', 'fac'])}
-    <div class="g g2"><section class="panel"><header><h2>Qué fue difícil</h2><p class="sub">Temas de Qualtrics en Q7 · % sobre las ${f0(a.com_q7)} encuestas que escribieron algo.</p></header>${barras(temas(TD, D.temas.dificil, idx), a.com_q7, () => 'var(--d-2)')}</section>${ranking('ces', 'ces')}</div>`;
+    <div class="g g2"><section class="panel" style="align-self:start"><header><h2>Qué fue difícil</h2><p class="sub">Temas de Qualtrics en Q7 · % sobre las ${f0(a.com_q7)} encuestas que escribieron algo.</p></header>${G.paletas(temas(TD, D.temas.dificil, idx), a.com_q7)}</section>${ranking('ces', 'ces')}</div>`;
 }
 function vResolucion(p) {
   const idx = filas(), gr = [...ests().map(e => ({nombre: EST[e], a: sumar(filas({estudio: e}))})), ...(st.estudio == null ? [{nombre: 'Total', a: sumar(idx)}] : [])];
-  const br = gr.map(g => { const a = g.a, si = a.q8_si ? (a.prom_si - a.det_si) / a.q8_si * 100 : null, no = a.q8_no ? (a.prom_no - a.det_no) / a.q8_no * 100 : null;
-    return `<div class="bf"><div class="et"><b>${esc(g.nombre)}</b><br><span class="nota">${fmt('fun', IND.fun.calc(a))} funciona</span></div>
-      <div class="c"><span>NPS si funciona</span><b>${si == null ? '—' : f1(si)}</b><span>n ${f0(a.q8_si)}</span></div>
-      <div class="c"><span>NPS si no funciona</span><b>${no == null ? '—' : f1(no)}</b><span>n ${f0(a.q8_no)}</span></div>
-      <div class="c gap"><span>Brecha</span><b>${si != null && no != null ? f1(si - no) : '—'}</b><span>pts de NPS</span></div></div>`; }).join('');
+  // NPS de quien dice que funciona frente a quien dice que no (Q8)
+  const br = G.brecha(gr.map(g => { const a = g.a;
+    return {nombre: g.nombre, sub: `${fmt('fun', IND.fun.calc(a))} funciona`,
+      bueno: a.q8_si ? {v: (a.prom_si - a.det_si) / a.q8_si * 100, n: a.q8_si} : null,
+      malo: a.q8_no ? {v: (a.prom_no - a.det_no) / a.q8_no * 100, n: a.q8_no} : null}; }),
+    {etqBueno: 'Funciona', etqMalo: 'No funciona', unidad: 'pts de NPS'});
   p.innerHTML = `
-    <div class="g g2"><section class="panel"><header><h2>¿Quedó funcionando el servicio?</h2><p class="sub">Q8 · NPS de quienes dicen que funciona frente a quienes dicen que no.</p></header><div class="brechas">${br}</div></section>
-      <section class="panel"><header><h2>Composición</h2></header>${apilada(gr, PARTES_FUN, 'fun')}<div style="height:10px"></div>${apilada(gr, PARTES_NPS, 'nps')}</section></div>
+    <div class="g g2"><section class="panel res-br"><header><h2>¿Quedó funcionando el servicio?</h2><p class="sub">Q8 · NPS de quienes dicen que funciona frente a quienes dicen que no.</p></header>${br}</section>
+      <section class="panel comp"><header><h2>Composición</h2><p class="sub">Arriba, si el servicio quedó funcionando (Q8). Abajo, cómo recomiendan (Q2): cada cuadrito es 1 % de las encuestas.</p></header>
+        <div class="comp-b"><h3>¿Funciona?</h3>${donasFun(gr)}</div><div class="comp-b"><h3>NPS</h3>${wafNps(gr)}</div></section></div>
     ${carrusel('resol', ['nof', 'sif'])}
     <div class="g g2">${ranking('fun', 'fun')}${ranking('nps', 'nps')}</div>`;
 }
 function vAsesor(p) {
   const gr = ests().map(e => ({e: EST[e], a: sumar(filas({estudio: e}))}));
-  const q9 = D.q9.map((nom, j) => { const q = `q9_${j + 1}`, rs = gr.map(g => ({e: g.e, r: prop(g.a[q + '_top2'], g.a[q + '_val'])}));
-    return `<div class="barra doble"><span class="et">${esc(nom)}</span><span class="p">${rs.map(x => `<span ${tipAttr(x.r ? `<div class="t">${esc(nom)} · ${x.e}</div>${f1(x.r.v)} % califica 4–5 · n ${f0(x.r.n)}` : 'Sin datos')}><b style="width:${x.r ? x.r.v : 0}%;background:${CE[x.e]}"></b></span>`).join('')}</span><span class="num">${rs.map(x => x.r ? f1(x.r.v) + ' %' : '—').join('<br>')}</span></div>`; }).join('');
+  // Relojes: un anillo por estudio (exterior = el primero); el color del arco va de rojo (0 %) a verde (100 %)
+  const q9 = G.relojes(D.q9.map((nom, j) => { const q = `q9_${j + 1}`;
+    return {nombre: nom, series: gr.map(g => ({e: g.e, color: CE[g.e], r: prop(g.a[q + '_top2'], g.a[q + '_val'])}))}; }));
   p.innerHTML = `
-    <div class="g g-1-2"><section class="panel"><header><h2>Desempeño del asesor</h2><div class="leyenda">${gr.map(g => `<span><i style="background:${CE[g.e]}"></i>${g.e}</span>`).join('')}</div><p class="sub">Q9 · % que califica 4 o 5 cada atributo.</p></header><div class="barras" style="gap:14px">${q9}</div></section>
+    <div class="g g-1-2"><section class="panel"><header><h2>Desempeño del asesor</h2><div class="leyenda">${gr.map(g => `<span><i style="background:${CE[g.e]}"></i>${g.e}</span>`).join('')}</div><p class="sub">Q9 · % que califica 4 o 5 cada atributo. El punto de color marca el anillo de cada estudio.</p></header>${q9}</section>
       ${ranking('ase', 'ase', [['aliado', 'Aliado'], ['operacion', 'Operación'], ['marcacion', 'Marcación'], ['region', 'Región']])}</div>
     ${carrusel('ase', ['amal', 'abien'])}`;
 }
@@ -563,17 +597,17 @@ function vVoz(p) {
   const emos = D.emociones.map((e, i) => ({nombre: e, c: a['emo_' + i], i})).filter(x => x.c), be = emos.reduce((s, x) => s + x.c, 0);
   const ej = C ? ejemplos(exEst.lente || null, exEst.ver, norm(exEst.q)) : null;
   p.innerHTML = `
-    <div class="g g2"><section class="panel"><header><h2>Emociones</h2><p class="sub">Q5 · rojo = negativas, azul = positivas.</p></header>${barras(emos, be, x => EMO_C[x.i])}</section>
-      <section class="panel"><header><h2>Cómo mejorar al asesor</h2><p class="sub">Temas de Qualtrics en Q10 · % sobre ${f0(a.com_q10)} encuestas con comentario.</p></header>${barras(temas(TM, D.temas.mejora, idx), a.com_q10, () => 'var(--d2)')}</section></div>
+    <div class="g g2"><section class="panel"><header><h2>Emociones</h2><p class="sub">Q5 · rojo = negativas, verde = positivas.</p></header>${G.paletas(emos, be, {color: x => EMO_C[x.i]})}</section>
+      <section class="panel"><header><h2>Cómo mejorar al asesor</h2><p class="sub">Temas de Qualtrics en Q10 · % sobre ${f0(a.com_q10)} encuestas con comentario.</p></header>${G.paletas(temas(TM, D.temas.mejora, idx), a.com_q10, {color: () => 'var(--cat)'})}</section></div>
     <section class="panel"><header><h2>Explorador de comentarios</h2><span class="nota">${ej ? f0(ej.total) + ' comentarios' : 'Cargando…'}</span></header>
       <div class="ex-herr"><input type="search" id="ex-q" placeholder="Buscar: visita, técnico, whatsapp, factura…" value="${esc(exEst.q)}" aria-label="Buscar en comentarios">
         <div class="seg" role="group" aria-label="Tipo"><button type="button" data-l="" aria-pressed="${!exEst.lente}">Todos</button>${Object.entries(LENTES).map(([k, l]) => `<button type="button" data-l="${k}" aria-pressed="${exEst.lente === k}">${l.t}</button>`).join('')}</div></div>
       <div class="ex">${ej == null ? Array(6).fill('<div class="esqueleto"></div>').join('') : ej.items.map(v => tarjeta(v, exEst.q)).join('') || '<p class="vacio">Sin comentarios</p>'}</div>
       ${ej && ej.total > ej.items.length ? `<button type="button" class="mas" id="ex-mas">Ver más (${f0(ej.total - ej.items.length)} restantes)</button>` : ''}</section>`;
   const q = p.querySelector('#ex-q'); let t;
-  q.oninput = () => { clearTimeout(t); t = setTimeout(() => { exEst.q = q.value.trim(); exEst.ver = 36; pintarTab(); const n = p.querySelector('#ex-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
-  p.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { exEst.lente = b.dataset.l; exEst.ver = 36; pintarTab(); });
-  p.querySelector('#ex-mas')?.addEventListener('click', () => { exEst.ver += 36; pintarTab(); });
+  q.oninput = () => { clearTimeout(t); t = setTimeout(() => { exEst.q = q.value.trim(); exEst.ver = 36; pintarTab({anim: false}); const n = p.querySelector('#ex-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
+  p.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { exEst.lente = b.dataset.l; exEst.ver = 36; pintarTab({anim: false}); });
+  p.querySelector('#ex-mas')?.addEventListener('click', () => { exEst.ver += 36; pintarTab({anim: false}); });
 }
 function vCalidad(p) {
   const per = PERIODOS[st.periodo], inf = D.periodos[per], o = {error: 0, aviso: 1, ok: 2}, ico = {ok: '✓', aviso: '!', error: '✕'};
@@ -587,12 +621,19 @@ function vCalidad(p) {
           <dt>Mes</dt><dd>Mes de RECORDEDDATE (cuando Qualtrics registró la respuesta); coincide con los exportes oficiales.</dd><dt>Unidad</dt><dd>La encuesta (RESPONSEID).</dd><dt>IC 95 %</dt><dd>Margen de error por muestreo. Diferencias menores pueden ser ruido.</dd><dt>Red</dt><dd>BIDIRECCIONAL = HFC, FTT = FTTH.</dd></dl></section></div></div>`;
   p.querySelectorAll('.meses button').forEach(b => b.onclick = () => { fijarMeses([+b.dataset.i]); refrescar(); });
 }
+// Llegaron los comentarios: solo cambian los carruseles (y el explorador de Voces)
+function conComentarios() {
+  if (st.tab === 'voz') pintarTab({anim: false});
+  else repintarCarruseles(document.getElementById('p-' + st.tab));
+}
 const VISTAS = {resumen: vResumen, facilidad: vFacilidad, resolucion: vResolucion, asesor: vAsesor, voz: vVoz, calidad: vCalidad};
-function pintarTab() {
+// o.anim = false: repinta en el estado final, sin animar (tema, buscador de Voces, comentarios)
+function pintarTab(o = {}) {
   const p = document.getElementById('p-' + st.tab);
   VISTAS[st.tab](p);
   montarRanking(p); montarCarrusel(p); dibujarLineas(p);
   p.querySelectorAll('[data-cajon]').forEach(b => b.onclick = () => abrirCajon(b.dataset.cajon));
+  if (o.anim !== false) G.animar(p);
   if (!C && st.tab !== 'calidad') cargarComentarios();
 }
 
@@ -602,8 +643,8 @@ function abrirCajon(k, foco = true) {
   if (foco) volverA = document.activeElement;
   const a = sumar(filas()), r = IND[k].calc(a), [malo, bueno] = PAR[k];
   const gr = ests().map(e => ({nombre: EST[e], a: sumar(filas({estudio: e}))}));
-  const dist = k === 'nps' ? apilada(gr, PARTES_NPS, 'nps') : k === 'fun' ? apilada(gr, PARTES_FUN, 'fun') : k === 'ces' ? divergente(gr) :
-    `<div class="barras">${D.q9.map((nom, j) => { const q = `q9_${j + 1}`, x = prop(a[q + '_top2'], a[q + '_val']); return `<div class="barra"><span class="et">${esc(nom)}</span><span class="p"><b style="width:${x ? x.v : 0}%;background:var(--d2)"></b></span><span class="num">${x ? f1(x.v) + ' %' : '—'}</span></div>`; }).join('')}</div>`;
+  const dist = k === 'nps' ? wafNps(gr) : k === 'fun' ? donasFun(gr) : k === 'ces' ? divergente(gr) :
+    G.relojes(D.q9.map((nom, j) => { const q = `q9_${j + 1}`; return {nombre: nom, series: [{e: st.estudio == null ? 'Total' : EST[st.estudio], color: 'var(--ink-3)', r: prop(a[q + '_top2'], a[q + '_val'])}]}; }));
   const col = l => { const ej = ejemplos(l, 4); return `<div class="col"><h4><i class="punto" style="background:${LENTES[l].malo ? 'var(--d-2)' : 'var(--d2)'}"></i>${LENTES[l].t}${ej ? ` <span class="nota">${f0(ej.total)}</span>` : ''}</h4>${ej == null ? '<div class="esqueleto"></div>' : ej.items.map(v => tarjeta(v)).join('') || '<p class="nota">Sin comentarios</p>'}</div>`; };
   cajon.dataset.k = k;
   cajon.innerHTML = `<header><span class="nota">${etqMeses(st.meses)} · ${alcance()}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${IND[k].nombre}</h2>
@@ -614,7 +655,7 @@ function abrirCajon(k, foco = true) {
       <div><h3>Lo que dicen</h3><div class="dos">${col(malo)}${col(bueno)}</div>
       <button type="button" class="mas" id="cj-mas">Ver todos en Voces ›</button></div></div>`;
   cajon.hidden = velo.hidden = false;
-  requestAnimationFrame(() => { cajon.classList.add('ver'); velo.classList.add('ver'); dibujarLineas(cajon); });
+  requestAnimationFrame(() => { cajon.classList.add('ver'); velo.classList.add('ver'); dibujarLineas(cajon); G.animar(cajon, {inmediato: true}); });
   cajon.querySelector('.x').onclick = cerrarCajon;
   cajon.querySelector('#cj-mas').onclick = () => { exEst.lente = malo; cerrarCajon(); irA('voz'); };
   montarCarrusel(cajon);
@@ -707,7 +748,7 @@ function pintarTema() {
 btnTema.onclick = () => {
   const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = t; try { localStorage.setItem('sopfm-tema', t); } catch (e) { /* sin almacenamiento */ }
-  pintarTema(); pintarTab();
+  pintarTema(); pintarTab({anim: false});
 };
 
 // ------------------------------------------------------------------ ciclo
@@ -723,6 +764,10 @@ const ult = PERIODOS[PERIODOS.length - 1];
 document.getElementById('actualizado').textContent = D.generado.slice(0, 10).split('-').reverse().join('/');
 document.getElementById('sello').textContent = `${mesC(PERIODOS[0])} a ${mesC(ult)} · ${f0(PERIODOS.reduce((s, p) => s + D.periodos[p].n, 0))} encuestas`;
 pintarTema(); refrescar();
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { dibujarLineas(document.getElementById('p-' + st.tab)); if (cajon.dataset.k) dibujarLineas(cajon); }, 150); });
+// Al cambiar el tamaño se redibujan las líneas sin animar
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
+  const h = document.documentElement; h.setAttribute('data-sin-anim', '');
+  dibujarLineas(document.getElementById('p-' + st.tab)); if (cajon.dataset.k) dibujarLineas(cajon);
+  h.removeAttribute('data-sin-anim'); }, 150); });
 addEventListener('hashchange', () => { leerHash(); refrescar(); });
 })();
