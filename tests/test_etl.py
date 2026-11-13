@@ -129,6 +129,9 @@ def test_cubo_suma_conteos():
     m = dict(zip(agregar.MEDIDAS, tot))
     assert (m["n"], m["prom"], m["det"], m["q6_5"], m["q6_1"], m["q8_si"], m["q8_no"]) == (2, 1, 1, 1, 1, 1, 1)
     assert (m["prom_si"], m["det_no"], m["q9_1_top2"], m["q9_4_val"]) == (1, 1, 2, 0)
+    # sumas de la correlación con el NPS: (q6, q2) = (5, 10) y (1, 3); ase sin pares porque falta Q9_4
+    assert (m["r_ces_n"], m["r_ces_x"], m["r_ces_y"], m["r_ces_xy"]) == (2, 6, 13, 53)
+    assert (m["r_fun_n"], m["r_fun_x"], m["r_fun_xy"], m["r_ase_n"]) == (2, 1, 10, 0)
 
 
 # ------------------------------------------------------------------ cifras de referencia (oct-2026)

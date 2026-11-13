@@ -53,6 +53,11 @@ arriba; el menú lateral y la barra de filtros quedan fijos al desplazar. Modo c
   recuperarían en teoría = % con el dolor × (NPS sin − NPS con). Es decir, el NPS pasaría a ser el de quienes no lo viven.
   Los dolores se cruzan, así que los puntos no se suman; el techo de arriba usa las encuestas sin ningún dolor.
   Ene–ago cuadra con los decks de dolores de Suficiencia Soporte y Suficiencia Fallas Masivas (prueba automática).
+- **Correlación con el NPS** (valor junto al n de CES, Funcionando y Asesor): Pearson entre la nota del indicador y Q2 (0–10),
+  encuesta por encuesta, con los filtros actuales. CES = Q6 (1–5), Funcionando = Q8 (sí/no), Asesor = suma de los 4 atributos de Q9
+  (solo quien calificó los 4). Verde ≥ 0,50, amarillo 0,30–0,49, rojo < 0,30; no se calcula con menos de 30 pares.
+- **Varios meses**: el filtro de mes tiene casillas. Con varios meses las cifras suman todas sus encuestas y se comparan con los
+  mismos N meses justo antes (si la selección es continua). La URL guarda `periodo=AAAAMM|AAAAMM`.
 - Periodo = mes de `RECORDEDDATE` (coincide 100 % con los exportes oficiales; con él la serie CES cuadra exacto con el Power BI). Unidad = encuesta (`RESPONSEID`). Muestra baja = n < 30.
 
 ### Trampas conocidas de la fuente (oct-2026)

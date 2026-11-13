@@ -5,6 +5,11 @@ import pandas as pd
 
 from etl.config import EMOCIONES, Q9_ATRIBUTOS
 
+# Correlación con el NPS (Q2 0–10), encuesta por encuesta: se guardan n, Σx, Σy, Σx², Σy², Σxy para calcular Pearson
+# con cualquier combinación de filtros. ces = Q6 (1–5), fun = Q8 (0/1), ase = suma de los 4 atributos de Q9 (solo
+# encuestas que calificaron los 4; Pearson no cambia con la escala, así que suma = promedio).
+CORR_NPS = ["ces", "fun", "ase"]
+
 DIMS = ["periodo", "semana", "estudio", "region", "red", "marcacion", "aliado", "operacion", "estrato"]
 
 # Orden fijo de las medidas: el tablero las lee por nombre desde `medidas` en datos.js
@@ -15,6 +20,7 @@ MEDIDAS = (
     + [f"{q.lower()}_{s}" for q in Q9_ATRIBUTOS for s in ("top2", "val")]
     + [f"emo_{i}" for i in range(len(EMOCIONES))]
     + ["com_q7", "com_q10"]  # encuestas con comentario: base de los % de temas
+    + [f"r_{k}_{m}" for k in CORR_NPS for m in ("n", "x", "y", "xx", "yy", "xy")]
 )
 
 
@@ -38,7 +44,14 @@ def _indicadoras(d):
     for i, e in enumerate(EMOCIONES):
         m[f"emo_{i}"] = (d.emocion == e).astype(int)
     m["com_q7"], m["com_q10"] = d.com_q7, d.com_q10
-    return m[MEDIDAS]
+    q9 = d[[q.lower() for q in Q9_ATRIBUTOS]]
+    xs = {"ces": d.q6, "fun": d.q8, "ase": q9.sum(axis=1, min_count=len(Q9_ATRIBUTOS))}
+    for k in CORR_NPS:
+        par = d.q2.notna() & xs[k].notna()
+        x, y = xs[k].where(par, 0), d.q2.where(par, 0)
+        m[f"r_{k}_n"], m[f"r_{k}_x"], m[f"r_{k}_y"] = par.astype(int), x, y
+        m[f"r_{k}_xx"], m[f"r_{k}_yy"], m[f"r_{k}_xy"] = x * x, y * y, x * y
+    return m[MEDIDAS].astype(int)
 
 
 # Por dolor: encuestas, promotores, detractores, CES fácil y CES válidas (las de «sin dolor» salen por resta)

@@ -63,18 +63,18 @@ const fmtGrande = (k, r) => r == null ? '—' : `${f1(r.v)}<small>${k === 'nps' 
 
 // ------------------------------------------------------------------ estado + URL
 const TABS = [['resumen', 'Resumen'], ['facilidad', 'Facilidad'], ['resolucion', 'Resolución'], ['asesor', 'Asesor'], ['voz', 'Voces'], ['calidad', 'Calidad']];
-const st = {periodo: PERIODOS.length - 1, estudio: null, tab: 'resumen', evo: 'nps', modo: PERIODOS.length > 1 ? 'mes' : 'semana',
+const st = {periodo: PERIODOS.length - 1, meses: [PERIODOS.length - 1], estudio: null, tab: 'resumen', evo: 'nps', modo: PERIODOS.length > 1 ? 'mes' : 'semana',
   ...Object.fromEntries(MULTI.map(([k]) => [k, new Set()]))};
 function leerHash() {
   const h = new URLSearchParams(location.hash.slice(1));
-  if (h.has('periodo')) { const i = PERIODOS.indexOf(h.get('periodo')); if (i >= 0) st.periodo = i; }
+  if (h.has('periodo')) { const ms = h.get('periodo').split('|').map(p => PERIODOS.indexOf(p)).filter(i => i >= 0); if (ms.length) fijarMeses(ms); }
   st.estudio = h.has('estudio') && EST.includes(h.get('estudio')) ? EST.indexOf(h.get('estudio')) : null;
   if (h.has('tab') && TABS.some(t => t[0] === h.get('tab'))) st.tab = h.get('tab');
   for (const [k] of MULTI) st[k] = new Set((h.get(k) || '').split('|').filter(Boolean).map(v => V[k].indexOf(v)).filter(i => i >= 0));
 }
 function escribirHash() {
   const h = new URLSearchParams();
-  h.set('periodo', PERIODOS[st.periodo]);
+  h.set('periodo', st.meses.map(i => PERIODOS[i]).join('|'));
   if (st.estudio != null) h.set('estudio', EST[st.estudio]);
   for (const [k] of MULTI) if (st[k].size) h.set(k, [...st[k]].map(i => V[k][i]).join('|'));
   if (st.tab !== 'resumen') h.set('tab', st.tab);
@@ -82,9 +82,21 @@ function escribirHash() {
 }
 
 // ------------------------------------------------------------------ motor
+// Meses elegidos (casillas). st.periodo = el más reciente de la selección: referencia para calidad y año corrido.
+const ultimo = a => a[a.length - 1];
+function fijarMeses(ms) { st.meses = [...new Set(ms)].sort((a, b) => a - b); st.periodo = ultimo(st.meses); }
+// Ventana anterior para comparar: los mismos N meses justo antes de la selección (si la selección es continua)
+function mesesAnteriores() {
+  const m = st.meses, n = m.length, ini = m[0];
+  if (ultimo(m) - ini !== n - 1 || ini - n < 0) return null;
+  return Array.from({length: n}, (_, i) => ini - n + i);
+}
+const etqMeses = ms => ms.length === 1 ? mesL(PERIODOS[ms[0]]) : ultimo(ms) - ms[0] === ms.length - 1 ? `${mesC(PERIODOS[ms[0]])} a ${mesC(PERIODOS[ultimo(ms)])}` : ms.map(i => mesC(PERIODOS[i])).join(', ');
+const etqCorta = ms => ms.length === 1 ? mesC(PERIODOS[ms[0]]) : etqMeses(ms);
+// o.periodo: null = todos, número = un mes, arreglo = esos meses; si no viene, los meses elegidos
 function pasa(r, o = {}) {
-  const per = 'periodo' in o ? o.periodo : st.periodo, est = 'estudio' in o ? o.estudio : st.estudio;
-  if (per != null && r[0] !== per) return false;
+  const per = 'periodo' in o ? o.periodo : st.meses, est = 'estudio' in o ? o.estudio : st.estudio;
+  if (per != null && (Array.isArray(per) ? !per.includes(r[0]) : r[0] !== per)) return false;
   if (est != null && r[DI.estudio] !== est) return false;
   for (const [k] of MULTI) if (k !== o.ignorar && st[k].size && !st[k].has(r[DI[k]])) return false;
   return true;
@@ -103,7 +115,7 @@ function porDim(idx, dim) {
 const ests = () => st.estudio == null ? EST.map((_, i) => i) : [st.estudio];
 const alcance = () => st.estudio == null ? 'Soporte + Falla masiva' : EST[st.estudio];
 function serie(k, modo, e) {
-  const idx = filas({periodo: modo === 'mes' ? null : st.periodo, estudio: e});
+  const idx = filas(modo === 'mes' ? {periodo: null, estudio: e} : {estudio: e});
   return porDim(idx, modo === 'mes' ? 'periodo' : 'semana')
     .map(g => ({x: g.v, et: modo === 'mes' ? mesC(V.periodo[g.v]) : semC(V.semana[g.v]), r: IND[k].calc(g.a)}))
     .filter(p => p.r).sort((a, b) => a.x - b.x);
@@ -198,10 +210,19 @@ const bajo = r => r && r.n < NMIN ? ' <span class="bajo">muestra baja</span>' : 
 const ctrl = document.getElementById('ctrl'), barF = document.getElementById('filtros');
 function pintarCtrl() {
   ctrl.innerHTML = `
-    <label class="sr" for="f-per">Periodo</label>
-    <select class="sel" id="f-per">${PERIODOS.map((p, i) => `<option value="${i}"${i === st.periodo ? ' selected' : ''}>${mesL(p)}</option>`).join('')}</select>
+    <div class="mes-f" id="f-per"><button type="button" class="sel" aria-haspopup="true" aria-expanded="false" title="Elegir uno o varios meses">${etqMeses(st.meses)}${st.meses.length > 1 ? ` <b>· ${st.meses.length} meses</b>` : ''}</button>
+      <div class="pop" hidden role="group" aria-label="Meses"><div class="atajos"><button type="button" data-m="ult">Solo el último</button><button type="button" data-m="todos">Todos</button></div>
+        ${PERIODOS.map((p, i) => i).reverse().map(i => `<label class="op"><input type="checkbox" value="${i}"${st.meses.includes(i) ? ' checked' : ''}><span>${mesL(PERIODOS[i])}</span><small>${f0(D.periodos[PERIODOS[i]].n)}</small></label>`).join('')}
+        <p class="nota" style="margin:6px 8px 2px">Con varios meses, las cifras suman todas sus encuestas y se comparan con los mismos meses justo antes.</p></div></div>
     <div class="seg" role="group" aria-label="Estudio" id="f-est"><button type="button" data-v="" aria-pressed="${st.estudio == null}">Todos</button>${EST.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.estudio === i}"><i style="background:${CE[e]}"></i>${e}</button>`).join('')}</div>`;
-  ctrl.querySelector('#f-per').onchange = e => { st.periodo = +e.target.value; refrescar(); };
+  const fp_ = ctrl.querySelector('#f-per'), bp = fp_.querySelector('button.sel'), pp = fp_.querySelector('.pop');
+  bp.onclick = e => { e.stopPropagation(); const si = pp.hidden; document.querySelectorAll('.pop:not([hidden])').forEach(x => { x.hidden = true; }); pp.hidden = !si; bp.setAttribute('aria-expanded', si); };
+  fp_.addEventListener('keydown', e => { if (e.key === 'Escape') { pp.hidden = true; bp.setAttribute('aria-expanded', false); bp.focus(); } });
+  pp.querySelectorAll('input[type=checkbox]').forEach(c => { c.onchange = () => {
+    const ms = new Set(st.meses); if (c.checked) ms.add(+c.value); else ms.delete(+c.value);
+    if (!ms.size) { c.checked = true; return; }   // siempre queda al menos un mes
+    fijarMeses([...ms]); refrescar({mantener: '__mes'}); }; });
+  pp.querySelectorAll('[data-m]').forEach(b => { b.onclick = () => { fijarMeses(b.dataset.m === 'ult' ? [PERIODOS.length - 1] : PERIODOS.map((_, i) => i)); refrescar({mantener: '__mes'}); }; });
   ctrl.querySelectorAll('#f-est button').forEach(b => b.onclick = () => { st.estudio = b.dataset.v === '' ? null : +b.dataset.v; refrescar(); });
 }
 function pintarFiltros() {
@@ -226,7 +247,8 @@ function montarPop(caja) {
     const b = pop.querySelector('.buscar'); if (b) b.oninput = () => { const q = norm(b.value); pop.querySelectorAll('.op').forEach(o => o.hidden = !norm(o.textContent).includes(q)); };
   }
 }
-document.addEventListener('click', e => { if (!e.target.closest('.pill-f')) document.querySelectorAll('.pop:not([hidden])').forEach(p => { p.hidden = true; p.previousElementSibling.setAttribute('aria-expanded', false); }); });
+document.addEventListener('click', e => { if (!e.target.closest('.mes-f')) { const mp = document.querySelector('.mes-f .pop'); if (mp && !mp.hidden) { mp.hidden = true; mp.previousElementSibling.setAttribute('aria-expanded', false); } } });
+document.addEventListener('click', e => { if (!e.target.closest('.pill-f')) document.querySelectorAll('.pill-f .pop:not([hidden])').forEach(p => { p.hidden = true; p.previousElementSibling.setAttribute('aria-expanded', false); }); });
 function alternar(dim, i) { if (!MULTI.some(([k]) => k === dim)) return; st[dim].has(i) ? st[dim].delete(i) : st[dim].add(i); refrescar(); }
 
 // ------------------------------------------------------------------ navegación
@@ -248,7 +270,7 @@ function irA(k) { st.tab = k; pintarNav(); pintarTab(); escribirHash(); const t 
 // ------------------------------------------------------------------ piezas
 function delta(k, act, ant, etq) {
   if (!act) return '';
-  if (!ant) return `<span class="nota">sin mes anterior</span>`;
+  if (!ant) return `<span class="nota">${st.meses.length > 1 ? 'sin un periodo anterior igual para comparar' : 'sin mes anterior'}</span>`;
   const d = act.v - ant.v, c = Math.abs(d) < .05 ? 'igual' : d > 0 ? 'mejora' : 'empeora';
   return `<span class="delta ${c}" ${tipAttr(`${etq}: ${fmt(k, ant)} · n ${f0(ant.n)}`)}>${c === 'igual' ? '■' : d > 0 ? '▲' : '▼'} ${fpp(d)} ${k === 'nps' ? 'pts' : 'pp'}<span class="sr"> ${c === 'mejora' ? 'mejora' : c === 'empeora' ? 'empeora' : 'igual'}</span></span><span class="nota">vs ${etq}</span>`;
 }
@@ -257,7 +279,7 @@ function spark(k) {
   if (!lines.length) return '';
   const W = 200, H = 34, all = lines.flatMap(s => s.pts.map(p => p.r.v)), lo = Math.min(...all), hi = Math.max(...all), rg = hi - lo || 1, n = PERIODOS.length;
   const X = i => 3 + (W - 6) * i / Math.max(1, n - 1);
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><line x1="${X(st.periodo)}" x2="${X(st.periodo)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>${lines.map(s =>
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${st.meses.map(m => `<line x1="${X(m)}" x2="${X(m)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>`).join('')}${lines.map(s =>
     `<polyline fill="none" stroke="${CE[EST[s.e]]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" points="${s.pts.map(p => X(p.x) + ',' + (3 + (H - 6) * (1 - (p.r.v - lo) / rg))).join(' ')}"/>`).join('')}</svg>`;
 }
 function pesa(k, rs) {
@@ -286,10 +308,10 @@ function dibujarLineas(raiz) {
     const X = i => xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 52))));
     let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
-    if (modo === 'mes' && xs.includes(st.periodo)) s += `<rect x="${X(xs.indexOf(st.periodo)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`;
+    if (modo === 'mes') st.meses.filter(m => xs.includes(m)).forEach(m => { s += `<rect x="${X(xs.indexOf(m)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`; });
     for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
     if (lo < 0 && hi > 0) s += `<line class="eje" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
-    xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && x === st.periodo ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
+    xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && st.meses.includes(x) ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
     for (const {e, pts} of S) {
       const c = CE[e], pos = pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p]);
       s += `<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${pos.map(q => q[0] + ',' + q[1]).join(' ')}"/>`;
@@ -381,7 +403,7 @@ const DOLOR = {
 const dolEst = {rango: 'mes'};
 function filasDolor() {
   if (dolEst.rango === 'mes') return filas();
-  const anio = PERIODOS[st.periodo].slice(0, 4);
+  const anio = PERIODOS[st.periodo].slice(0, 4);   // año corrido hasta el último mes elegido
   return filas({periodo: null}).filter(i => { const p = PERIODOS[D.cubo[i][0]]; return p.slice(0, 4) === anio && D.cubo[i][0] <= st.periodo; });
 }
 const npsDe = (n, prom, det) => n ? (prom - det) / n * 100 : null;
@@ -412,7 +434,7 @@ function pista(con, sin, min, ref, suf, tip) {
 }
 function vDolores() {
   const idx = filasDolor(), {tot, alguno, dol} = calcDolores(idx);
-  const rango = dolEst.rango === 'mes' ? mesL(PERIODOS[st.periodo]) : `ene a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
+  const rango = dolEst.rango === 'mes' ? etqMeses(st.meses) : `ene a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
   const orden = dol.filter(x => x.n).sort((a, b) => (b.n >= NMIN) - (a.n >= NMIN) || b.pts - a.pts);
   const maxPts = Math.max(1, ...orden.filter(x => x.n >= NMIN).map(x => x.pts));
   const X = v => (v + 100) / 2;
@@ -444,7 +466,7 @@ function vDolores() {
     </li>`;
   }).join('');
   return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
-      <div class="herr"><div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">Mes</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
+      <div class="herr"><div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">${st.meses.length > 1 ? 'Meses elegidos' : 'Mes'}</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
       <p class="sub">${alcance()} · ${rango}. Lo que cuentan los clientes en sus comentarios, cruzado con lo que responden de NPS y CES. Arriba, el dolor que más puntos de NPS le quita a la nota.</p></header>
     ${cab}
     <div class="dol-ley" aria-hidden="true"><span></span><span>Lo vive</span><span><i class="pt con"></i>Con el dolor <i class="pt sin"></i>Sin el dolor <i class="ref"></i>Total del corte · NPS</span><span>CES</span><span>NPS que recupera</span></div>
@@ -453,9 +475,29 @@ function vDolores() {
   </section>`;
 }
 
+// ------------------------------------------------------------------ correlación con el NPS
+// Pearson entre la nota del indicador y la recomendación 0–10 (Q2), encuesta por encuesta
+function corr(k, a) {
+  const n = a['r_' + k + '_n'];
+  if (n == null || n < NMIN) return null;
+  const mx = a['r_' + k + '_x'] / n, my = a['r_' + k + '_y'] / n;
+  const vx = a['r_' + k + '_xx'] / n - mx * mx, vy = a['r_' + k + '_yy'] / n - my * my, cv = a['r_' + k + '_xy'] / n - mx * my;
+  return vx > 0 && vy > 0 ? {r: cv / Math.sqrt(vx * vy), n} : null;
+}
+// Fuerza: verde ≥ 0,5 (fuerte), amarillo 0,3–0,5 (moderada), rojo < 0,3 (baja)
+const fuerza = r => Math.abs(r) >= .5 ? 'fuerte' : Math.abs(r) >= .3 ? 'moderada' : 'baja';
+const nf2 = new Intl.NumberFormat('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const NOTA_CORR = {ces: 'la facilidad (Q6, 1 a 5)', fun: 'si el servicio funciona (Q8, sí o no)', ase: 'la calificación del asesor (los 4 atributos de Q9; solo quien calificó los 4)'};
+function corrTxt(k, a) {
+  const c = corr(k, a);
+  if (!c) return ` · <span class="corr na" ${tipAttr('<div class="t">Correlación con el NPS</div>Menos de ' + NMIN + ' encuestas con ambas respuestas: no se calcula.')}>—</span>`;
+  const v = nf2.format(c.r).replace('-', '−'), f = fuerza(c.r);
+  return ` · <span class="corr ${f}" ${tipAttr(`<div class="t">Correlación con el NPS: ${v} (${f})</div>Pearson entre ${NOTA_CORR[k]} y la recomendación de 0 a 10, encuesta por encuesta (${f0(c.n)} pares, con los filtros actuales).<br>Verde ≥ 0,50 fuerte · amarillo 0,30 a 0,49 moderada · rojo < 0,30 baja.<br>${c.r >= .3 ? 'Quien califica mejor este punto tiende a recomendar más.' : 'Este punto se mueve poco junto con la recomendación.'} Correlación no es causa.`)}><span class="sr">Correlación con el NPS, ${f}: </span>${v}</span>`;
+}
+
 // ------------------------------------------------------------------ vistas
 function vResumen(p) {
-  const a = sumar(filas()), ant = st.periodo > 0 ? st.periodo - 1 : null, aAnt = ant != null ? sumar(filas({periodo: ant})) : null, etA = ant != null ? mesC(PERIODOS[ant]) : '';
+  const a = sumar(filas()), ant = mesesAnteriores(), aAnt = ant ? sumar(filas({periodo: ant})) : null, etA = ant ? etqCorta(ant) : '';
   const porE = EST.map((_, e) => sumar(filas({estudio: e})));
   const kpis = KS.map((k, i) => {
     const r = IND[k].calc(a), pr = aAnt ? IND[k].calc(aAnt) : null;
@@ -464,14 +506,14 @@ function vResumen(p) {
       <div class="v" ${tipAttr(tipInd(k, r))}>${fmtGrande(k, r)}</div>
       <div class="pie">${delta(k, r, pr, etA)}</div>
       ${spark(k)}
-      <div class="pie"><span>n ${r ? f0(r.n) : 0}${r ? ` · ±${f1(r.ic)}` : ''}</span>${bajo(r)}<button type="button" class="ver" data-cajon="${k}" aria-label="Ver detalle y comentarios de ${IND[k].nombre}">Voces ›</button></div></article>`;
+      <div class="pie"><span>n ${r ? f0(r.n) : 0}${r ? ` · ±${f1(r.ic)}` : ''}${k === 'nps' ? '' : corrTxt(k, a)}</span>${bajo(r)}<button type="button" class="ver" data-cajon="${k}" aria-label="Ver detalle y comentarios de ${IND[k].nombre}">Voces ›</button></div></article>`;
   }).join('');
   const vs = KS.map(k => { const rs = porE.map(x => IND[k].calc(x)), br = rs[0] && rs[1] ? rs[0].v - rs[1].v : null;
     return `<div class="f"><div class="n">${IND[k].corto}<small>${rs.map(r => fmt(k, r)).join(' · ')}</small></div>${pesa(k, rs)}<div class="b">${br == null ? '—' : fpp(br)}<small>Sop − FM</small></div></div>`; }).join('');
   p.innerHTML = `
-    <section class="kpis" aria-label="Indicadores de ${mesL(PERIODOS[st.periodo])}">${kpis}</section>
+    <section class="kpis" aria-label="Indicadores de ${etqMeses(st.meses)}">${kpis}</section>
     <div class="g g-2-1" style="min-height:0">
-      <section class="panel"><header><h2>${IND[st.evo].nombre} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + mesL(PERIODOS[st.periodo])}</h2>
+      <section class="panel"><header><h2>${IND[st.evo].nombre} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
         <div class="herr"><div class="seg" role="group" aria-label="Indicador" id="evo-k">${KS.map(k => `<button type="button" data-k="${k}" aria-pressed="${st.evo === k}">${IND[k].corto}</button>`).join('')}</div>
         ${PERIODOS.length > 1 ? `<div class="seg" role="group" aria-label="Agrupar" id="evo-m"><button type="button" data-m="mes" aria-pressed="${st.modo === 'mes'}">Mes</button><button type="button" data-m="semana" aria-pressed="${st.modo === 'semana'}">Semana</button></div>` : ''}</div>
         <div class="leyenda" style="flex-basis:100%">${ests().map(e => `<span><i class="l" style="background:${CE[EST[e]]}"></i>${EST[e]}</span>`).join('')}<span class="nota">Punto hueco = menos de ${NMIN} encuestas</span>${tablaPH('evo')}</div></header>
@@ -543,7 +585,7 @@ function vCalidad(p) {
       <div class="g" style="align-content:start"><section class="panel"><header><h2>Fuente</h2></header><dl class="defs"><dt>Tabla</dt><dd>${esc(D.tabla)} · Oracle, solo lectura</dd><dt>Encuestas</dt><dd>${f0(inf.n)} en ${mesL(per)} · ${f0(PERIODOS.reduce((s, pp) => s + D.periodos[pp].n, 0))} en total</dd><dt>Carga en Oracle</dt><dd>${esc(inf.fecha_carga)}</dd><dt>Procesado</dt><dd>${esc(inf.generado)}</dd><dt>Comentarios</dt><dd>${f0(D.n_comentarios)}, con datos personales tapados</dd></dl></section>
         <section class="panel"><header><h2>Definiciones</h2></header><dl class="defs">${KS.map(k => `<dt>${IND[k].corto}</dt><dd>${esc(IND[k].def)}</dd>`).join('')}
           <dt>Mes</dt><dd>Mes de RECORDEDDATE (cuando Qualtrics registró la respuesta); coincide con los exportes oficiales.</dd><dt>Unidad</dt><dd>La encuesta (RESPONSEID).</dd><dt>IC 95 %</dt><dd>Margen de error por muestreo. Diferencias menores pueden ser ruido.</dd><dt>Red</dt><dd>BIDIRECCIONAL = HFC, FTT = FTTH.</dd></dl></section></div></div>`;
-  p.querySelectorAll('.meses button').forEach(b => b.onclick = () => { st.periodo = +b.dataset.i; refrescar(); });
+  p.querySelectorAll('.meses button').forEach(b => b.onclick = () => { fijarMeses([+b.dataset.i]); refrescar(); });
 }
 const VISTAS = {resumen: vResumen, facilidad: vFacilidad, resolucion: vResolucion, asesor: vAsesor, voz: vVoz, calidad: vCalidad};
 function pintarTab() {
@@ -564,7 +606,7 @@ function abrirCajon(k, foco = true) {
     `<div class="barras">${D.q9.map((nom, j) => { const q = `q9_${j + 1}`, x = prop(a[q + '_top2'], a[q + '_val']); return `<div class="barra"><span class="et">${esc(nom)}</span><span class="p"><b style="width:${x ? x.v : 0}%;background:var(--d2)"></b></span><span class="num">${x ? f1(x.v) + ' %' : '—'}</span></div>`; }).join('')}</div>`;
   const col = l => { const ej = ejemplos(l, 4); return `<div class="col"><h4><i class="punto" style="background:${LENTES[l].malo ? 'var(--d-2)' : 'var(--d2)'}"></i>${LENTES[l].t}${ej ? ` <span class="nota">${f0(ej.total)}</span>` : ''}</h4>${ej == null ? '<div class="esqueleto"></div>' : ej.items.map(v => tarjeta(v)).join('') || '<p class="nota">Sin comentarios</p>'}</div>`; };
   cajon.dataset.k = k;
-  cajon.innerHTML = `<header><span class="nota">${mesL(PERIODOS[st.periodo])} · ${alcance()}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${IND[k].nombre}</h2>
+  cajon.innerHTML = `<header><span class="nota">${etqMeses(st.meses)} · ${alcance()}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${IND[k].nombre}</h2>
       <div class="big">${fmtGrande(k, r)}</div><p class="def">${esc(IND[k].def)}</p><span class="nota">n ${r ? f0(r.n) : 0}${r ? ` · IC 95 % ±${f1(r.ic)}` : ''}</span>
       <button type="button" class="icono x" aria-label="Cerrar">${svgI('x')}</button></header>
     <div class="cuerpo"><div><h3>Mes a mes</h3><div class="chart" style="min-height:170px" data-lineas="${k}" data-modo="mes" id="cj-l"></div>${tablaPH('cj-l')}</div>
@@ -596,7 +638,7 @@ const dl = document.getElementById('dl'), dlPop = document.getElementById('dl-po
 const dlEst = {alcance: 'mes', formato: 'xlsx'};
 const slug = t => norm(t).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const filtrosTxt = () => [st.estudio != null ? EST[st.estudio] : '', ...MULTI.filter(([k]) => st[k].size).map(([k, et]) => `${et}: ${[...st[k]].map(i => V[k][i]).join(', ')}`)].filter(Boolean).join(' · ') || 'Sin filtros';
-function dlPeriodos() { return dlEst.alcance === 'mes' ? [PERIODOS[st.periodo]] : D.base.periodos; }
+function dlPeriodos() { return dlEst.alcance === 'mes' ? st.meses.map(i => PERIODOS[i]) : D.base.periodos; }
 function dlNombre() {
   const ps = dlPeriodos(), f = [st.estudio != null ? slug(EST[st.estudio]) : '', ...MULTI.filter(([k]) => st[k].size).map(([k]) => [...st[k]].map(i => slug(V[k][i])).join('-'))].filter(Boolean);
   return `soporte_fm_base_${ps[0]}${ps.length > 1 ? '_a_' + ps[ps.length - 1] : ''}${f.length ? '_' + f.join('_').slice(0, 80) : ''}.${dlEst.formato}`;
@@ -607,7 +649,7 @@ function pintarDescarga() {
   const ocupado = dlPop.querySelector('.ir')?.dataset.estado === 'trabajando';
   if (ocupado) return;
   dlPop.innerHTML = `<h3>Descargar base de encuestas</h3>
-    <div><div class="et-dl">Meses</div><div class="seg" role="group" aria-label="Meses"><button type="button" data-a="mes" aria-pressed="${dlEst.alcance === 'mes'}">${mesL(PERIODOS[st.periodo])}</button><button type="button" data-a="todos" aria-pressed="${dlEst.alcance === 'todos'}">Todos (${mesC(D.base.periodos[0])} a ${mesC(D.base.periodos[D.base.periodos.length - 1])})</button></div></div>
+    <div><div class="et-dl">Meses</div><div class="seg" role="group" aria-label="Meses"><button type="button" data-a="mes" aria-pressed="${dlEst.alcance === 'mes'}">${etqMeses(st.meses)}</button><button type="button" data-a="todos" aria-pressed="${dlEst.alcance === 'todos'}">Todos (${mesC(D.base.periodos[0])} a ${mesC(D.base.periodos[D.base.periodos.length - 1])})</button></div></div>
     <div><div class="et-dl">Formato</div><div class="seg" role="group" aria-label="Formato"><button type="button" data-f="xlsx" aria-pressed="${dlEst.formato === 'xlsx'}" title="Libro de Excel (.xlsx)">Excel</button><button type="button" data-f="csv" aria-pressed="${dlEst.formato === 'csv'}" title="Texto separado por punto y coma">CSV</button><button type="button" data-f="parquet" aria-pressed="${dlEst.formato === 'parquet'}" title="Columnar y comprimido, para Python o Power BI">Parquet</button></div></div>
     <div class="resumen-dl"><b>${f0(n)} encuestas</b>${esc(filtrosTxt())}</div>
     <button type="button" class="ir"${n ? '' : ' disabled'}><span>Descargar ${dlEst.formato === 'xlsx' ? 'Excel' : dlEst.formato.toUpperCase()}</span></button>
@@ -671,7 +713,8 @@ btnTema.onclick = () => {
 // ------------------------------------------------------------------ ciclo
 function refrescar(o = {}) {
   pintarCtrl(); pintarFiltros();
-  if (o.mantener) barF.querySelector(`.pill-f[data-k="${o.mantener}"] button`)?.click();
+  if (o.mantener === '__mes') ctrl.querySelector('#f-per button.sel')?.click();
+  else if (o.mantener) barF.querySelector(`.pill-f[data-k="${o.mantener}"] button`)?.click();
   pintarNav(); pintarTab(); escribirHash(); pintarDescarga();
   if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
 }

@@ -1,5 +1,12 @@
 # Cambios
 
+## 2026-11-13 · v4
+
+- Junto al n de CES, Funcionando y Asesor va la correlación con el NPS (Pearson, encuesta por encuesta), en verde (fuerte),
+  amarillo (moderada) o rojo (baja); la explicación sale al pasar el cursor. En octubre: CES 0,69, Funcionando 0,71, Asesor 0,73.
+- El filtro de mes pasa a casillas: uno o varios meses, con atajos «Solo el último» y «Todos». La URL guarda la selección.
+- Lo mismo que se hizo en el tablero de Factura, pago y cobro.
+
 ## 2026-11-11 · v3
 
 - Caja «Dolores del cliente» en Resumen: 9 dolores con la taxonomía de los análisis de suficiencia de Soporte y Fallas masivas,

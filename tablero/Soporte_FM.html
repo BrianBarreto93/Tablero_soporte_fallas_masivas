@@ -368,6 +368,18 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 #tip b{font-weight:900}#tip .t{font-weight:900;margin-bottom:2px}
 #tip i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
 
+/* Meses: casillas para elegir uno o varios */
+.mes-f{position:relative}
+.mes-f>.sel{max-width:min(360px,70vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.mes-f>.sel b{font-weight:900;color:var(--rojo-txt)}
+.mes-f .pop{min-width:250px}
+.atajos{display:flex;gap:6px;padding:4px 4px 8px;margin-bottom:4px;border-bottom:1px solid var(--line)}
+.atajos button{flex:1;height:28px;border:1px solid var(--line-2);border-radius:999px;background:var(--panel-2);font:700 11.5px var(--f-ui);color:var(--ink-2)}
+.atajos button:hover{color:var(--ink);border-color:var(--ink-3)}
+/* Correlación con el NPS, junto al n de cada KPI */
+.corr{display:inline-block;padding:0 6px;border-radius:999px;font:800 10.5px/16px var(--f-ui);font-variant-numeric:tabular-nums;cursor:help;background:var(--panel-2);color:var(--ink-2)}
+.corr.fuerte{background:var(--bien-f);color:var(--bien)}.corr.moderada{background:var(--ojo-f);color:var(--ojo)}.corr.baja{background:var(--mal-f);color:var(--mal)}
+
 /* ===== Responsivo (mismos cortes que CR y recurrencia: 1300 y 760) ===== */
 @media (max-width:1300px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
