@@ -61,7 +61,10 @@ arriba; el menú lateral y la barra de filtros quedan fijos al desplazar. Modo c
   o un segmento (región, red, aliado, marcación, operación; n ≥ 30 en ambos periodos) cae frente al periodo anterior.
   *A vigilar*: el valor más bajo de la serie (≥ 6 meses) o tres meses seguidos bajando (con un solo mes elegido), un segmento
   por debajo del total del estudio, o un dolor que sube. *Mejora*: el indicador sube. Segmentos y dolores: los 3 de más peso
-  por estudio. «Filtrar» aplica ese segmento a todo el tablero. Si el mes elegido es el del corte, se avisa que está en curso.
+  por estudio. *Encuestas*: promedio mensual de los meses elegidos frente al promedio histórico de los demás meses (mismos
+  filtros, mínimo 3 meses de historia); alarma si difiere ±25 % (*crítica* si hay 50 % o más de menos). El mes en curso se
+  proyecta al mes completo (n × días del mes / días corridos). El promedio incluye meses atípicos (sep-26 Soporte: 3.483).
+  «Filtrar» aplica ese segmento a todo el tablero. Si el mes elegido es el del corte, se avisa que está en curso.
 - **Correlación con el NPS** (valor junto al n de CES, Funcionando y Asesor): Pearson entre la nota del indicador y Q2 (0–10),
   encuesta por encuesta, con los filtros actuales. CES = Q6 (1–5), Funcionando = Q8 (sí/no), Asesor = suma de los 4 atributos de Q9
   (solo quien calificó los 4). Verde ≥ 0,50, amarillo 0,30–0,49, rojo < 0,30; no se calcula con menos de 30 pares.

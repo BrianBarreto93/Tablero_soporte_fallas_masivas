@@ -517,11 +517,38 @@ const alEst = {todos: false};
 const margen = (a, b) => Math.hypot(a.ic, b.ic);
 const unid = k => k === 'nps' ? 'pts' : 'pp';
 const ESC = k => IND[k].max - IND[k].min;
+// Volumen de encuestas: promedio mensual de los meses elegidos frente al promedio histórico de los demás meses (con los mismos
+// filtros). Si el mes elegido es el último y está en curso, se proyecta al mes completo (n × días del mes / días corridos).
+// Alarma si la diferencia pasa de ±25 %; crítica si hay 50 % o más de encuestas de menos (la lectura pierde respaldo).
+const UMBRAL_VOL = .25;
+function mesParcial() {
+  const g = D.generado, ult = PERIODOS[PERIODOS.length - 1];
+  if (g.slice(0, 4) + g.slice(5, 7) !== ult) return null;
+  const dia = +g.slice(8, 10), dias = new Date(+ult.slice(0, 4), +ult.slice(4), 0).getDate();
+  return dia < dias ? {dia, dias, factor: dias / dia} : null;
+}
+function volumen(e) {
+  const porP = new Map(porDim(filas({estudio: e, periodo: null}), 'periodo').map(g => [g.v, g.a.n]));
+  const ult = PERIODOS.length - 1, par = mesParcial();
+  const hist = [...porP.keys()].filter(i => !st.meses.includes(i) && !(i === ult && par));
+  if (hist.length < 3) return null;
+  const prom = hist.reduce((t, i) => t + porP.get(i), 0) / hist.length;
+  if (prom < NMIN) return null;
+  const proy = i => (porP.get(i) || 0) * (i === ult && par ? par.factor : 1);
+  const real = st.meses.reduce((t, i) => t + (porP.get(i) || 0), 0) / st.meses.length, act = st.meses.reduce((t, i) => t + proy(i), 0) / st.meses.length;
+  const rel = act / prom - 1;
+  if (Math.abs(rel) < UMBRAL_VOL) return null;
+  const proyectado = st.meses.includes(ult) && par, mas = rel > 0;
+  return {nivel: !mas && rel <= -.5 ? 'alta' : 'media', e, peso: Math.min(Math.abs(rel), 1) / 2,
+    tit: `Encuestas: ${f0(act)}${st.meses.length > 1 ? ' al mes' : ''}, ${f0(Math.abs(rel) * 100)} % ${mas ? 'más' : 'menos'} que el promedio histórico`,
+    det: `Promedio de ${hist.length} meses: ${f0(prom)} al mes · ${etqCorta(st.meses)}: ${f0(real)}${proyectado ? ` hasta el ${par.dia}, proyectado al mes completo ${f0(act)}` : ''}${mas ? ' · más encuestas de lo normal: revisa si cambió la muestra o hubo un evento' : ' · con menos encuestas las cifras tienen más margen de error'}`};
+}
 function alarmas() {
   const out = [], ant = mesesAnteriores(), etA = ant ? etqCorta(ant) : '', etM = etqCorta(st.meses);
   for (const e of ests()) {
     const idx = filas({estudio: e}), a = sumar(idx), idxA = ant ? filas({estudio: e, periodo: ant}) : [], aA = ant ? sumar(idxA) : null;
     const seg = [], dol = [];
+    const vol = volumen(e); if (vol) out.push(vol);
     for (const k of KS) {
       const r = IND[k].calc(a), rA = aA ? IND[k].calc(aA) : null;
       if (!r || r.n < NMIN) continue;
@@ -587,7 +614,7 @@ function vAlarmas() {
   const nomN = {alta: ['crítica', 'críticas'], media: ['a vigilar', 'a vigilar'], bien: ['mejora', 'mejoras']};
   const enCurso = st.periodo === PERIODOS.length - 1 && D.generado.slice(0, 7).replace('-', '') === per;
   const vis = alEst.todos ? al : al.slice(0, tope);
-  const reglas = 'Cuenta como alarma solo lo que sale del margen de error al 95 %.<br><b>Crítica</b>: el indicador o un segmento (región, red, aliado, marcación, operación; n ≥ ' + NMIN + ') cae frente al periodo anterior.<br><b>A vigilar</b>: el valor más bajo de la serie o tres meses seguidos bajando (con un solo mes elegido), un segmento por debajo del total del estudio o un dolor que sube.<br><b>Mejora</b>: el indicador sube frente al periodo anterior.<br>Responde a los filtros: con un estudio elegido muestra solo ese.';
+  const reglas = 'Cuenta como alarma solo lo que sale del margen de error al 95 %.<br><b>Crítica</b>: el indicador o un segmento (región, red, aliado, marcación, operación; n ≥ ' + NMIN + ') cae frente al periodo anterior.<br><b>A vigilar</b>: el valor más bajo de la serie o tres meses seguidos bajando (con un solo mes elegido), un segmento por debajo del total del estudio o un dolor que sube.<br><b>Encuestas</b>: más o menos de ±25 % frente al promedio mensual histórico (a vigilar; crítica si hay 50 % o más de menos). El mes en curso se proyecta al mes completo.<br><b>Mejora</b>: el indicador sube frente al periodo anterior.<br>Responde a los filtros: con un estudio elegido muestra solo ese.';
   const li = (x, i) => `<li class="al ${x.nivel}" data-an="aparece" data-i="${i}"><i class="al-p" aria-hidden="true"></i>
       <div class="al-x"><div class="al-t"><span class="al-e" style="--c:${CE[EST[x.e]]}">${EST[x.e] === 'Falla masiva' ? 'FM' : 'Soporte'}</span>${x.tit}</div><p>${x.det}</p></div>
       ${x.filtro ? `<button type="button" class="al-f" data-dim="${x.filtro.dim}" data-v="${x.filtro.v}" aria-pressed="${st[x.filtro.dim].has(x.filtro.v)}">${st[x.filtro.dim].has(x.filtro.v) ? 'Quitar filtro' : 'Filtrar'}</button>` : ''}</li>`;

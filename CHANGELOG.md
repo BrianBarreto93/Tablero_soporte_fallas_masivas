@@ -1,5 +1,10 @@
 # Cambios
 
+## 2026-11-17 · v6.1
+
+- Alarmas: nueva regla de **cantidad de encuestas**. Más o menos de ±25 % frente al promedio mensual histórico es alerta
+  (crítica si hay 50 % o más de menos); el mes en curso se proyecta al mes completo. Responde a los filtros.
+
 ## 2026-11-17 · v6
 
 - Base descargable con **cuenta, teléfono y correo** (después del ID), **Clasificación de red** (HFC, FTTH propia,
