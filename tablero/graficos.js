@@ -93,9 +93,13 @@ function spark(series, n, marcas, o) {
   (marcas || []).forEach(function (m) { s += '<line x1="' + X(m) + '" x2="' + X(m) + '" y1="0" y2="' + H + '" class="g-marca" vector-effect="non-scaling-stroke"/>'; });
   series.forEach(function (sr, k) {
     if (sr.pts.length < 2) return;
-    var d = sr.pts.map(function (p, j) { return (j ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1); }).join(' ');
-    var a = d + ' L' + X(sr.pts[sr.pts.length - 1].i).toFixed(1) + ' ' + H + ' L' + X(sr.pts[0].i).toFixed(1) + ' ' + H + ' Z';
-    s += '<path d="' + a + '" style="fill:url(#' + ids[k] + ')" data-an="aparece" data-i="' + (k + 2) + '"/>';
+    // tramos: la línea se corta donde faltan periodos (no se dibuja un tramo inventado)
+    var tr = [];
+    sr.pts.forEach(function (p, j) { if (!j || p.i - sr.pts[j - 1].i > 1) tr.push([]); tr[tr.length - 1].push(p); });
+    var linea = function (t) { return t.map(function (p, j) { return (j ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1); }).join(' '); };
+    var d = tr.map(linea).join(' ');
+    var a = tr.filter(function (t) { return t.length > 1; }).map(function (t) { return linea(t) + ' L' + X(t[t.length - 1].i).toFixed(1) + ' ' + H + ' L' + X(t[0].i).toFixed(1) + ' ' + H + ' Z'; }).join(' ');
+    if (a) s += '<path d="' + a + '" style="fill:url(#' + ids[k] + ')" data-an="aparece" data-i="' + (k + 2) + '"/>';
     s += '<path d="' + d + '" pathLength="1" style="fill:none;stroke:' + sr.color + ';stroke-width:2;stroke-linejoin:round;stroke-linecap:round" vector-effect="non-scaling-stroke" data-an="traza" data-i="' + k + '"/>';
   });
   return s + '</svg>';

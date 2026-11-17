@@ -7,6 +7,41 @@ descargable sale de Yellowbrick (`VW_CLIEN_SERVICIOS_FTTH`, credenciales del `.e
 - Publicado: https://servidor.lan.qwertylab.dev/umm/SOPORTE-FM/Soporte_FM.html
 - Abrir local: `tablero/Soporte_FM.html` (funciona con doble clic, sin servidor ni internet).
 
+## Vistas
+
+Capturas de octubre 2026 (cierre completo); el tablero abre en el último mes disponible. Modo claro por defecto, con botón para oscuro.
+
+**Resumen.** Los cuatro indicadores con tendencia, la evolución mes a mes, las alarmas y la caja de dolores del cliente.
+
+![Resumen](docs/img/resumen.png)
+
+**Alarmas.** Responden a los filtros (estudio, región, red, aliado, marcación, operación): caídas y mejoras fuera del margen de error,
+cantidad de encuestas frente al promedio histórico, segmentos por debajo del total y dolores que suben. «Filtrar» aplica el segmento a todo el tablero.
+
+![Alarmas](docs/img/alarmas.png)
+
+**Facilidad (CES)**, **Resolución** (¿quedó funcionando?) y **Asesor** (los cuatro atributos de Q9):
+
+![Facilidad](docs/img/facilidad.png)
+
+![Resolución](docs/img/resolucion.png)
+
+![Asesor](docs/img/asesor.png)
+
+**Calidad de datos.** Chequeos del contrato de datos de cada mes; los errores bloquean la corrida y los avisos se muestran aquí.
+
+![Calidad de datos](docs/img/calidad.png)
+
+**Descarga de la base** (Excel, CSV o Parquet, con los filtros activos):
+
+![Descargar base](docs/img/descarga.png)
+
+**Modo oscuro** y **celular** (menú abajo, KPI en una columna):
+
+![Modo oscuro](docs/img/resumen_oscuro.png)
+
+<img src="docs/img/movil.png" alt="Vista en celular" width="280">
+
 ## Corrida mensual
 
 ```bash
