@@ -9,18 +9,21 @@ RAIZ = Path(__file__).resolve().parent.parent
 TABLA = "INVITADO_15.TBL_ENC_SOPORTE_FALLAS"
 DIR_PERIODOS = RAIZ / "data" / "periodos"     # un JSON agregado por mes (histórico acumulado)
 SALIDA_JS = RAIZ / "tablero" / "datos.js"
+DIR_CONTACTO = RAIZ / "tablero" / "contacto"  # cuenta, teléfono y correo por mes (en .gitignore)
 
 # Columnas que el ETL lee. Nunca SELECT *: la tabla trae nombres, correo, teléfonos, cédula, IP,
 # coordenadas y login del asesor. Los nombres del encuestado se leen SOLO para taparlos en los
 # comentarios y se descartan en memoria (ver verbatims.py); no llegan a la salida.
+# Cuenta, teléfono y correo (COLUMNAS_CONTACTO) van SOLO a tablero/contacto/ (base descargable, fuera de git).
 COLUMNAS = [
     "RESPONSEID", "STARTDATE", "RECORDEDDATE", "FINISHED", "FECHA", "FECHA_CARGA",
     "TIPO_ESTUDIO", "Q2", "Q2_NPS_GROUP", "Q6", "Q5", "Q8", "Q9_1", "Q9_2", "Q9_3", "Q9_4",
     "Q3", "Q13", "Q4", "Q7", "Q10",
     "Q4_SENTIMENT", "Q4_TOPICS", "Q7_SENTIMENT", "Q7_TOPICS",
     "DIVISION", "CIUDAD", "TIPO_RED", "ESTRATO", "MARCACION", "DES_MARCACION", "ALIADO", "OPERACION",
-    "GERENCIA", "DES_OPERACION",
+    "GERENCIA", "DES_OPERACION", "NODO",
 ]
+COLUMNAS_CONTACTO = ["NUMERO_CUENTA", "RECIPIENTPHONE", "RECIPIENTEMAIL"]
 COLUMNAS_SOLO_LIMPIEZA = ["RECIPIENTFIRSTNAME", "RECIPIENTLASTNAME"]
 # Para contar cuentas repetidas sin sacar la cuenta de Oracle (se agrega en SQL)
 CLAVE_CUENTA = "NUMERO_CUENTA"

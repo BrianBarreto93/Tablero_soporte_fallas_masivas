@@ -16,8 +16,8 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from etl import agregar, base, calidad, dolores, extraer, verbatims
-from etl.config import (ABIERTAS, DIR_PERIODOS, EMOCIONES, ESTUDIOS, N_MINIMO, Q6_ESCALA, Q9_ATRIBUTOS, REGIONES,
+from etl import agregar, base, calidad, dolores, extraer, red, verbatims
+from etl.config import (ABIERTAS, DIR_CONTACTO, DIR_PERIODOS, EMOCIONES, ESTUDIOS, N_MINIMO, Q6_ESCALA, Q9_ATRIBUTOS, REGIONES,
                         SALIDA_JS, SIN_DATO, TABLA)
 from etl.limpiar import limpiar
 
@@ -32,6 +32,10 @@ def procesar(periodos_pedidos=None):
     crudo = extraer.encuestas(conn)
     repetidas = extraer.cuentas_repetidas(conn)
     conn.close()
+    try:
+        yb, yb_error = red.cargar(), None
+    except Exception as e:   # sin Yellowbrick la corrida sigue: FTTH queda sin dividir en propia/neutra y se avisa
+        yb, yb_error = None, type(e).__name__   # sin el mensaje: puede traer usuario o host
 
     d = limpiar(crudo)
     if d.periodo.isna().any():
@@ -46,7 +50,7 @@ def procesar(periodos_pedidos=None):
         periodos = sorted(periodos_pedidos)
 
     DIR_PERIODOS.mkdir(parents=True, exist_ok=True)
-    salidas, errores = {}, []
+    salidas, contactos, errores = {}, {}, []
     for p in periodos:
         sel = d.periodo == p
         sub, crudo_p = d[sel], crudo[sel]
@@ -62,7 +66,14 @@ def procesar(periodos_pedidos=None):
                                         f"Antes {calidad.num(n_viejo)} encuestas, ahora {calidad.num(len(sub))}", len(sub)))
 
         vb, escaneo = verbatims.construir(crudo_p, sub)
-        bf, esc_base = base.construir(crudo_p, sub)
+        marcas = dolores.marcar(crudo_p, sub)
+        clase = red.clasificar(crudo_p, sub, yb)
+        bf, esc_base = base.construir(crudo_p, sub, clase, dolores.categoria(marcas))
+        cl = clase.value_counts()
+        sin = int(cl.get(red.SIN_CLASIFICAR, 0))
+        chk.append(calidad._chk("red_clasif", "aviso" if yb is None or sin else "ok", "Clasificación de red (propia / neutra)",
+                                f"Sin Yellowbrick ({yb_error}): FTTH sin dividir en propia y neutra" if yb is None else
+                                " · ".join(f"{k} {calidad.num(int(v))}" for k, v in cl.items()), sin))
         hall = calidad.escanear_pii(escaneo + esc_base)
         chk.append(calidad._chk("pii", "error" if hall else "ok", "Sin datos personales en los comentarios",
                                 f"{len(hall)} hallazgos: {hall[:3]}" if hall else
@@ -79,8 +90,9 @@ def procesar(periodos_pedidos=None):
         salidas[p] = {
             "periodo": p, "n": int(len(sub)), "generado": _ahora(),
             "fecha_carga": str(carga)[:16], "tabla": TABLA,
-            "filas": agregar.cubo(sub, dolores.marcar(crudo_p, sub)), "verbatims": vb, "base": bf, "calidad": chk,
+            "filas": agregar.cubo(sub, marcas), "verbatims": vb, "base": bf, "calidad": chk,
         }
+        contactos[p] = base.contacto(crudo_p, sub)
 
     if errores:
         print("CORRIDA DETENIDA: el contrato de calidad falló. No se escribió nada.", file=sys.stderr)
@@ -88,8 +100,11 @@ def procesar(periodos_pedidos=None):
             print("  ✗", e, file=sys.stderr)
         raise SystemExit(1)
 
+    DIR_CONTACTO.mkdir(exist_ok=True)
     for p, s in salidas.items():
         (DIR_PERIODOS / f"{p}.json").write_text(json.dumps(s, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        (DIR_CONTACTO / f"{p}.js").write_text(f"(window.CONTACTO=window.CONTACTO||{{}})[\"{p}\"]="
+                                             + json.dumps(contactos[p], ensure_ascii=False, separators=(",", ":")) + ";\n", encoding="utf-8")
         avisos = [c["titulo"] for c in s["calidad"] if c["nivel"] == "aviso"]
         print(f"{p}: {s['n']} encuestas, {len(s['verbatims'])} comentarios, {len(avisos)} avisos")
     return list(salidas)
@@ -154,7 +169,7 @@ def ensamblar():
         "emociones": EMOCIONES, "q6": list(Q6_ESCALA), "q9": list(Q9_ATRIBUTOS.values()),
         "temas": {"dificil": temas["td"], "mejora": temas["tm"]},
         "grupos": grupos, "preguntas": [ABIERTAS[q] for q in preguntas], "cod_preguntas": preguntas,
-        "base": {"columnas": base.COLUMNAS, "filtro": base.FILTRO, "periodos": [s["periodo"] for s in per if s.get("base")]},
+        "base": {"columnas": base.COLUMNAS, "contacto": base.CONTACTO, "filtro": base.FILTRO, "periodos": [s["periodo"] for s in per if s.get("base")]},
         "dolores": {"claves": list(dl_idx), "momentos": {k: m for k, (m, _) in dolores.REGLAS.items()},
                     "medidas": agregar.MEDIDAS_DOLOR, "filas": dl},
         "cubo": cubo, "temas_dificil": td, "temas_mejora": tm, "n_comentarios": len(vb),

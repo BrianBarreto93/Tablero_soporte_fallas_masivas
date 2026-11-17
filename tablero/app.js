@@ -131,6 +131,7 @@ function cargarComentarios() {
     C = cm.filas.map(f => ({r: f, grupo: f[ix.grupo], q8: f[ix.q8], q6: f[ix.q6], q2: f[ix.q2], q9: f[ix.q9], preg: D.cod_preguntas[f[ix.pregunta]], texto: f[ix.texto]}));
     delete window.COMENTARIOS;
     conComentarios(); if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
+    setTimeout(calentarNube, 400);
   };
   s.onerror = () => { C = []; conComentarios(); };
   document.body.appendChild(s);
@@ -148,11 +149,14 @@ const LENTES = {
 };
 const PAR = {nps: ['det', 'pro'], ces: ['dif', 'fac'], fun: ['nof', 'sif'], ase: ['amal', 'abien']};
 const GENERICO = /^(n\/?a|ninguna?|ninguno|nada|no|si|sí|ok|bien|bueno|buena|excelente|todo bien|gracias|mal[oa]?|regular|\.+|-+)\.?$/i;
+// Filtro de un comentario: tipo (lente) + filtros globales + búsqueda (q ya normalizado). Sin el filtro de genéricos ni de largo.
+const pasaCom = (v, L, q) => (!L || (L.pred(v) && L.preg.includes(v.preg))) && pasa(v.r) && (!q || (v.nt || (v.nt = norm(v.texto))).includes(q));
+const util = v => { const t = v.texto.trim(); return t !== '' && !GENERICO.test(t); };
 // Ejemplos representativos: filtros globales + lente, sin genéricos, largo legible, variados por marcación
 function ejemplos(lente, k = 12, q = '') {
   if (!C) return null;
   const L = lente ? LENTES[lente] : null;
-  const cand = C.filter(v => (!L || (L.pred(v) && L.preg.includes(v.preg))) && pasa(v.r) && v.texto.length >= 25 && !GENERICO.test(v.texto.trim()) && (!q || norm(v.texto).includes(q)));
+  const cand = C.filter(v => v.texto.length >= 25 && util(v) && pasaCom(v, L, q));
   const total = cand.length;
   cand.sort((a, b) => Math.abs(a.texto.length - 150) - Math.abs(b.texto.length - 150));
   const porM = new Map(); for (const v of cand) { const m = v.r[DI.marcacion]; if (!porM.has(m)) porM.set(m, []); porM.get(m).push(v); }
@@ -162,11 +166,13 @@ function ejemplos(lente, k = 12, q = '') {
   return {total, items: out};
 }
 const colNota = n => n == null || n < 0 ? 'var(--ink-3)' : n <= 6 ? 'var(--d-2)' : n <= 8 ? 'var(--ink-3)' : 'var(--d2)';
+// Chip con la recomendación (0 a 10) de quien escribió el comentario
+const chipNota = v => `<span class="nota-nps" style="background:${colNota(v.q2)}" ${tipAttr(`Recomendación: ${v.q2 < 0 ? '—' : v.q2 + ' de 10'}`)}>${v.q2 < 0 ? '–' : v.q2}</span>`;
 function tarjeta(v, marcar = '') {
   let t = esc(v.texto);
   if (marcar) t = t.replace(new RegExp(`(${esc(marcar).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
   const e = V.estudio[v.r[DI.estudio]];
-  return `<article class="voz" tabindex="0"><q>${t}</q><div class="m"><span class="nota-nps" style="background:${colNota(v.q2)}" ${tipAttr(`Recomendación: ${v.q2 < 0 ? '—' : v.q2 + ' de 10'}`)}>${v.q2 < 0 ? '–' : v.q2}</span>
+  return `<article class="voz" tabindex="0"><q>${t}</q><div class="m">${chipNota(v)}
     <span><i class="punto" style="background:${CE[e]}"></i> ${esc(e)} · ${mesC(PERIODOS[v.r[0]])}</span><span class="mc" title="${esc(V.marcacion[v.r[DI.marcacion]])}">${esc(V.marcacion[v.r[DI.marcacion]])}</span></div></article>`;
 }
 const carEst = {};
@@ -286,15 +292,6 @@ function delta(k, act, ant, etq) {
 function spark(k) {
   const series = ests().map(e => ({color: CE[EST[e]], pts: serie(k, 'mes', e).map(p => ({i: p.x, v: p.r.v}))})).filter(s => s.pts.length > 1);
   return series.length ? G.spark(series, PERIODOS.length, st.meses, {alto: 40}) : '';
-}
-// Pesa: los dos estudios sobre un riel con la rampa (rojo = peor, verde = mejor); los puntos entran deslizándose
-function pesa(k, rs, f = 0) {
-  const {min, max} = IND[k], X = v => (v - min) / (max - min) * 100, ok = rs.filter(Boolean);
-  let s = `<div class="pesa" role="img" aria-label="${IND[k].nombre}: ${EST.map((e, i) => e + ' ' + fmt(k, rs[i])).join(', ')}"><span class="riel" style="${G.rampaCss(.5)}"></span>`;
-  if (min < 0) s += `<span class="cero" style="left:${X(0)}%"></span>`;
-  if (ok.length === 2) s += `<span class="une" style="left:${Math.min(X(rs[0].v), X(rs[1].v))}%;width:${Math.abs(X(rs[0].v) - X(rs[1].v))}%" data-an="aparece" data-i="${f * 2 + 6}"></span>`;
-  rs.forEach((r, i) => { if (r) s += `<span class="pt${r.n < NMIN ? ' hueco' : ''}" style="left:${X(r.v)}%;background:${CE[EST[i]]};${r.n < NMIN ? 'border-color:' + CE[EST[i]] : ''}" data-an="desliza" data-desde="0%" data-i="${f * 2 + i}" ${tipAttr(tipInd(k, r, `<br>${EST[i]}`))}></span>`; });
-  return s + '</div>';
 }
 // Gráfico de líneas: se dibuja después de insertar el HTML, con el tamaño real del contenedor
 const lineasPH = (k, modo, id) => `<div class="chart" data-lineas="${k}" data-modo="${modo}" id="${id}" role="img" aria-label="${IND[k].nombre} por ${modo === 'mes' ? 'mes' : 'semana'}"></div>`;
@@ -506,10 +503,110 @@ function corrTxt(k, a) {
   return ` · <span class="corr ${f}" ${tipAttr(`<div class="t">Correlación con el NPS: ${v} (${f})</div>Pearson entre ${NOTA_CORR[k]} y la recomendación de 0 a 10, encuesta por encuesta (${f0(c.n)} pares, con los filtros actuales).<br>Verde ≥ 0,50 fuerte · amarillo 0,30 a 0,49 moderada · rojo < 0,30 baja.<br>${c.r >= .3 ? 'Quien califica mejor este punto tiende a recomendar más.' : 'Este punto se mueve poco junto con la recomendación.'} Correlación no es causa.`)}><span class="sr">Correlación con el NPS, ${f}: </span>${v}</span>`;
 }
 
+// ------------------------------------------------------------------ alarmas (Resumen)
+// Por estudio (el del filtro o los dos) e indicador, con los meses y filtros actuales. Una diferencia cuenta solo si sale
+// del margen de error al 95 % de las dos cifras juntas: √(ic₁² + ic₂²). Reglas:
+//  · alta  · el indicador cae frente al periodo anterior; un segmento (n ≥ 30 en ambos) cae frente al periodo anterior
+//  · media · tres meses seguidos bajando o el valor más bajo de la serie (con un solo mes elegido); un segmento queda por
+//            debajo del total del estudio; un dolor sube
+//  · bien  · el indicador mejora frente al periodo anterior
+// Segmentos y dolores: se muestran los 3 de más peso por estudio (n × diferencia, en proporción a la escala del indicador).
+const DIM_AL = [['region', 'Región'], ['red', 'Red'], ['aliado', 'Aliado'], ['marcacion', 'Marcación'], ['operacion', 'Operación']];   // MULTI: «Filtrar» usa alternar()
+const NIVEL_AL = {alta: 0, media: 1, bien: 2};
+const alEst = {todos: false};
+const margen = (a, b) => Math.hypot(a.ic, b.ic);
+const unid = k => k === 'nps' ? 'pts' : 'pp';
+const ESC = k => IND[k].max - IND[k].min;
+function alarmas() {
+  const out = [], ant = mesesAnteriores(), etA = ant ? etqCorta(ant) : '', etM = etqCorta(st.meses);
+  for (const e of ests()) {
+    const idx = filas({estudio: e}), a = sumar(idx), idxA = ant ? filas({estudio: e, periodo: ant}) : [], aA = ant ? sumar(idxA) : null;
+    const seg = [], dol = [];
+    for (const k of KS) {
+      const r = IND[k].calc(a), rA = aA ? IND[k].calc(aA) : null;
+      if (!r || r.n < NMIN) continue;
+      // Total del estudio frente al periodo anterior
+      if (rA && rA.n >= NMIN) {
+        const d = r.v - rA.v, m = margen(r, rA);
+        if (Math.abs(d) > m) out.push({nivel: d < 0 ? 'alta' : 'bien', e, peso: Math.abs(d) / ESC(k),
+          tit: `${IND[k].corto} ${d < 0 ? 'cae' : 'sube'} ${f1(Math.abs(d))} ${unid(k)}`,
+          det: `${etA} ${fmt(k, rA)} → ${etM} ${fmt(k, r)} · margen ±${f1(m)} · n ${f0(rA.n)} → ${f0(r.n)}`});
+      }
+      // Racha y mínimo de la serie mensual (solo con un mes elegido)
+      if (st.meses.length === 1) {
+        const pts = serie(k, 'mes', e).filter(x => x.x <= st.periodo && x.r.n >= NMIN), u = pts.length - 1;
+        if (u >= 0 && pts[u].x === st.periodo) {
+          const ult4 = pts.slice(-4), racha = ult4.length === 4 && ult4.every((x, i) => !i || (x.x === ult4[i - 1].x + 1 && x.r.v < ult4[i - 1].r.v));
+          const minimo = pts.length >= 6 && pts.slice(0, u).every(x => x.r.v > pts[u].r.v);
+          if (racha || minimo) out.push({nivel: 'media', e, peso: 1,
+            tit: `${IND[k].corto}: ${[minimo ? `el más bajo desde ${pts[0].et}` : '', racha ? 'tres meses seguidos bajando' : ''].filter(Boolean).join(' y ')}`,
+            det: (racha ? ult4 : pts.slice(-4)).map(x => `${x.et} ${fmt(k, x.r)}`).join(' → ')});
+        }
+      }
+      // Segmentos: caen frente al periodo anterior o quedan por debajo del total
+      for (const [dim, nomDim] of DIM_AL) {
+        if (st[dim].size === 1) continue;   // ya filtrado a un solo valor: es el total
+        const antD = ant ? new Map(porDim(idxA, dim).map(g => [g.v, IND[k].calc(g.a)])) : new Map();
+        for (const g of porDim(idx, dim)) {
+          const rs = IND[k].calc(g.a);
+          if (!rs || rs.n < NMIN || g.nombre === 'Sin dato') continue;
+          const ra = antD.get(g.v), filtro = {dim, v: g.v};
+          if (ra && ra.n >= NMIN && rs.v - ra.v < -margen(rs, ra))
+            seg.push({nivel: 'alta', e, filtro, clave: dim + g.v, peso: rs.n * (ra.v - rs.v) / ESC(k) / a.n,
+              tit: `${nomDim} ${esc(g.nombre)}: ${IND[k].corto} cae ${f1(ra.v - rs.v)} ${unid(k)}`,
+              det: `${etA} ${fmt(k, ra)} → ${etM} ${fmt(k, rs)} · n ${f0(ra.n)} → ${f0(rs.n)}`});
+          else if (rs.v + rs.ic < r.v)
+            seg.push({nivel: 'media', e, filtro, clave: dim + g.v, peso: rs.n * (r.v - rs.v) / ESC(k) / a.n / 2,
+              tit: `${nomDim} ${esc(g.nombre)}: ${IND[k].corto} ${f1(r.v - rs.v)} ${unid(k)} bajo el total`,
+              det: `${fmt(k, rs)} frente a ${fmt(k, r)} del estudio · n ${f0(rs.n)} (${f0(rs.n / r.n * 100)} %)`});
+        }
+      }
+    }
+    // Dolores que suben (proporción de encuestas que lo menciona)
+    if (ant && a.n >= NMIN && aA.n >= NMIN) {
+      const dAct = calcDolores(idx).dol, dAnt = new Map(calcDolores(idxA).dol.map(x => [x.k, x]));
+      for (const x of dAct) {
+        const y = dAnt.get(x.k), p1 = x.pct / 100, p0 = y.pct / 100, m = 196 * Math.hypot(Math.sqrt(p1 * (1 - p1) / a.n), Math.sqrt(p0 * (1 - p0) / aA.n));
+        if (x.pct - y.pct > m) dol.push({nivel: 'media', e, peso: (x.pct - y.pct) / 100,
+          tit: `Dolor en alza: «${esc(DOLOR[x.k][0])}»`,
+          det: `Lo menciona el ${f1(y.pct)} % → ${f1(x.pct)} % de las encuestas (+${f1(x.pct - y.pct)} pp) · NPS de quien lo vive ${x.con == null ? '—' : f1(x.con)}`});
+      }
+    }
+    // De cada segmento queda la alarma de más peso; 3 caídas y 3 brechas por estudio
+    const unico = new Map();
+    for (const x of seg.sort((a, b) => NIVEL_AL[a.nivel] - NIVEL_AL[b.nivel] || b.peso - a.peso)) if (!unico.has(x.clave)) unico.set(x.clave, x);
+    const segs = [...unico.values()];
+    out.push(...segs.filter(x => x.nivel === 'alta').slice(0, 3), ...segs.filter(x => x.nivel === 'media').slice(0, 3),
+      ...dol.sort((a, b) => b.peso - a.peso).slice(0, 3));
+  }
+  return out.sort((a, b) => NIVEL_AL[a.nivel] - NIVEL_AL[b.nivel] || b.peso - a.peso);
+}
+function vAlarmas() {
+  const al = alarmas(), ant = mesesAnteriores(), per = PERIODOS[st.periodo], tope = 7;
+  const cnt = Object.keys(NIVEL_AL).map(n => [n, al.filter(x => x.nivel === n).length]);
+  const nomN = {alta: ['crítica', 'críticas'], media: ['a vigilar', 'a vigilar'], bien: ['mejora', 'mejoras']};
+  const enCurso = st.periodo === PERIODOS.length - 1 && D.generado.slice(0, 7).replace('-', '') === per;
+  const vis = alEst.todos ? al : al.slice(0, tope);
+  const reglas = 'Cuenta como alarma solo lo que sale del margen de error al 95 %.<br><b>Crítica</b>: el indicador o un segmento (región, red, aliado, marcación, operación; n ≥ ' + NMIN + ') cae frente al periodo anterior.<br><b>A vigilar</b>: el valor más bajo de la serie o tres meses seguidos bajando (con un solo mes elegido), un segmento por debajo del total del estudio o un dolor que sube.<br><b>Mejora</b>: el indicador sube frente al periodo anterior.<br>Responde a los filtros: con un estudio elegido muestra solo ese.';
+  const li = (x, i) => `<li class="al ${x.nivel}" data-an="aparece" data-i="${i}"><i class="al-p" aria-hidden="true"></i>
+      <div class="al-x"><div class="al-t"><span class="al-e" style="--c:${CE[EST[x.e]]}">${EST[x.e] === 'Falla masiva' ? 'FM' : 'Soporte'}</span>${x.tit}</div><p>${x.det}</p></div>
+      ${x.filtro ? `<button type="button" class="al-f" data-dim="${x.filtro.dim}" data-v="${x.filtro.v}" aria-pressed="${st[x.filtro.dim].has(x.filtro.v)}">${st[x.filtro.dim].has(x.filtro.v) ? 'Quitar filtro' : 'Filtrar'}</button>` : ''}</li>`;
+  return `<section class="panel alarmas" id="alarmas"><header><h2 ${tipAttr(reglas)}>Alarmas <span class="info">?</span></h2>
+      <div class="al-cont">${cnt.filter(([, n]) => n).map(([nv, n]) => `<span class="al-c ${nv}">${n} ${nomN[nv][n === 1 ? 0 : 1]}</span>`).join('')}</div>
+      <p class="sub">${alcance()} · ${etqMeses(st.meses)}${ant ? ` frente a ${etqCorta(ant)}` : ' · sin un periodo anterior igual para comparar'}${enCurso ? ` · mes en curso (corte al ${D.generado.slice(8, 10)}/${D.generado.slice(5, 7)}): las cifras pueden moverse` : ''}</p></header>
+    ${al.length ? `<ol class="al-lista">${vis.map(li).join('')}</ol>${al.length > tope ? `<button type="button" class="mas" id="al-mas">${alEst.todos ? 'Ver menos' : `Ver las ${al.length}`}</button>` : ''}`
+      : `<p class="al-ok"><b>Sin alarmas.</b> Ningún indicador, segmento ni dolor se movió fuera del margen de error.</p>`}
+  </section>`;
+}
+function montarAlarmas(raiz) {
+  raiz.querySelectorAll('#alarmas .al-f').forEach(b => b.onclick = () => alternar(b.dataset.dim, +b.dataset.v));
+  const mas = raiz.querySelector('#al-mas');
+  if (mas) mas.onclick = () => { alEst.todos = !alEst.todos; const n = reemplazar(document.getElementById('alarmas'), vAlarmas()); montarAlarmas(n); G.animar(n, {inmediato: true}); };
+}
+
 // ------------------------------------------------------------------ vistas
 function vResumen(p) {
   const a = sumar(filas()), ant = mesesAnteriores(), aAnt = ant ? sumar(filas({periodo: ant})) : null, etA = ant ? etqCorta(ant) : '';
-  const porE = EST.map((_, e) => sumar(filas({estudio: e})));
   const kpis = KS.map((k, i) => {
     const r = IND[k].calc(a), pr = aAnt ? IND[k].calc(aAnt) : null;
     // Anillo: dónde cae el valor en su escala (NPS −100 a 100; el resto 0 a 100 %), en la rampa rojo → verde
@@ -521,17 +618,15 @@ function vResumen(p) {
       ${spark(k)}
       <div class="pie"><span>n ${r ? f0(r.n) : 0}${r ? ` · ±${f1(r.ic)}` : ''}${k === 'nps' ? '' : corrTxt(k, a)}</span>${bajo(r)}<button type="button" class="ver" data-cajon="${k}" aria-label="Ver detalle y comentarios de ${IND[k].nombre}">Voces ›</button></div></article>`;
   }).join('');
-  const vs = KS.map((k, f) => { const rs = porE.map(x => IND[k].calc(x)), br = rs[0] && rs[1] ? rs[0].v - rs[1].v : null;
-    return `<div class="f"><div class="n">${IND[k].corto}<small>${rs.map(r => fmt(k, r)).join(' · ')}</small></div>${pesa(k, rs, f)}<div class="b">${br == null ? '—' : G.cuenta(br, 1, {signo: true})}<small>Sop − FM</small></div></div>`; }).join('');
   p.innerHTML = `
     <section class="kpis" aria-label="Indicadores de ${etqMeses(st.meses)}">${kpis}</section>
     <div class="g g-2-1" style="min-height:0">
       ${panelEvo()}
-      <section class="panel"><header><h2 ${tipAttr('Mismo mes y filtros, sin el filtro de estudio. Escala: NPS de −100 a 100; el resto de 0 a 100 %.')}>Soporte vs Falla masiva <span class="info">?</span></h2><div class="leyenda">${EST.map(e => `<span><i style="background:${CE[e]}"></i>${e === 'Falla masiva' ? 'FM' : e}</span>`).join('')}</div></header><div class="vs">${vs}</div></section>
+      ${vAlarmas()}
     </div>
     ${vDolores()}
     ${carrusel('res', ['det', 'pro', 'dif', 'nof', 'amal'])}`;
-  montarDolores(p); montarEvo(p);
+  montarDolores(p); montarEvo(p); montarAlarmas(p);
 }
 // Evolución: cambiar indicador o agrupación repinta y anima solo este panel
 function panelEvo() {
@@ -590,24 +685,86 @@ function vAsesor(p) {
       ${ranking('ase', 'ase', [['aliado', 'Aliado'], ['operacion', 'Operación'], ['marcacion', 'Marcación'], ['region', 'Región']])}</div>
     ${carrusel('ase', ['amal', 'abien'])}`;
 }
-const exEst = {lente: '', q: '', ver: 36};
-function vVoz(p) {
+// ------------------------------------------------------------------ nube de comentarios (Voces)
+// Temas y limpieza de palabras preparados sobre los 25.261 comentarios ene–oct 2026 (cubren el 82,5 %). Las expresiones van sobre
+// el texto normalizado (minúsculas, sin tildes), sin bandera g. Parten de etl/dolores.py, pero aquí se marca cada comentario y
+// allá la encuesta: los porcentajes no son comparables uno a uno.
+const NUBE_CFG = (() => {
+  const cats = [
+    ["resuelve", "Falla sin resolver", "\\b(no|ni|nunca|nadie|sin|ningun|ninguna|ninguno|nada|tampoco|jamas)\\b[^.!?]{0,30}(solu|soluc|silu|salu|aolu|solicion|resolv|resuel|arregl|repar|compon|respuesta)|(sigue|sigo|siguen|seguimos|sigua|continua|continuo|continuan|persiste|persisten|aun|todavia|se mantiene)[^.!?]{0,30}(fall|sin |problema|igual|mism|mal|dan|presentand|inconvenien|lent|intermit|pesim)|(falla|problema|dano|inconveniente|error)s? (sigue|siguen|continua|continuan|persiste|persisten|aun)|persist|perciste|a medias|momentane|por un momento|nada que (sirve|funciona|ver|hacer)|sigue igual|igual que antes|no (se )?(mejor|sirvio|hacen nada|hicieron nada|hizo nada|ayudaron|ayudan)|no quedo (funcionando|bien|solucionad|arreglad|resuelt)|cerr(aron|ado|aban) (el|la|los) (caso|ticket|solicitud|incidente|reporte)|dieron por (solucionad|cerrad|resuelt)|\\b(den|dar|dando|dieran|brinden|brindar|brindando|ofrezcan|ofrecer|ofreciendo|busquen|buscar|buscando|buscandole|tengan|encontrar|aporten|necesito|necesitamos|requiero|quiero|queremos|espero|esperamos|exijo|solicito|pido|hagan|haga|se haga)\\b[^.!?]{0,20}(solu|soluc|silu|salu|aolu|solicion|resolv|resuel|arregl|repar|compon|respuesta)|\\bque (me |nos |le |les |lo |la |se |realmente |si |de verdad )*(solucionen|solucione|resuelvan|resuelva|arreglen|arregle|reparen|repare)\\b|(solucionando|resolviendo|arreglando)( de verdad| realmente| de fondo)? (el|los|la|las|mi|nuestro|su|sus) (problema|falla|dano|inconveniente|servicio)|solucion(es)? (real|reales|definitiva|definitivas|de fondo|efectiva|efectivas|concreta|concretas|oportuna)"],
+    ["servicio", "Internet y TV fallan", "intermit|se (cae|caia|cayo|va|iba|fue|desconecta|corta|cortaba|pierde|perdia) (el |la |mucho |constantemente |a cada rato |cada rato |seguido )?(internet|senal|servicio|wifi|conexion|red|tv|television|luz|canales|cable)|caidas?\\b|cayendo|(internet|servicio|senal|conexion|navegacion|red|wifi) (es |esta |estaba |muy |super |demasiado |sigue |demasiado )*lent|\\blento\\b|lentitud|velocidad|megas|\\bmb\\b|pixel|congel|inestab|cortes? (de|del|en|constantes)|baja (senal|velocidad)|fluctua|sin (el |los |la |las |ningun |nada de )?(servicio|internet|senal|tv|television|wifi|conexion|telefono fijo|telefonia|canales|cable|datos|red|fijo)|no (tengo|tenemos|hay|habia|tenia|teniamos|tiene|llega|llegaba|he tenido|hemos tenido|cuento con|contamos con) (el |la |los |nada de |ningun |ni )?(servicio|internet|senal|tv|television|wifi|conexion|canales|red|telefono fijo)|no (funciona|funcionaba|funcionan|funcionaron|sirve|servia|sirven|carga|cargan|conecta|navega|navego|enciende|prende)|no (me |nos )?(funciona|sirve)|deja de funcionar|dejo de funcionar|wi ?fi|\\bcanales?\\b|television|\\btv\\b|decodificador|\\bdecos?\\b|senal|cobertura|conexion|desconect|\\bmodem|\\bmoden|router|repetidor|fibra|plataforma|netflix|clarobox|claro video|internet|\\bred\\b|5g|2[.,]4|telefono fijo|linea fija"],
+    ["tiempo", "Tiempos y demoras", "\\b(\\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte|varios|varias|muchos|muchas|mas de \\w+) (dias|dia|semanas|semana|mes|meses|horas|hora|hrs|minutos|min)\\b|todo el dia|toda la (noche|semana|tarde|manana)|fin de semana|desde (el|hace|ayer|anoche|ese|la semana|el mes)|hace (\\w+ )?(dias|semanas|meses)|demor|tard(o|aron|an|aban|aba|anza|a mucho|isimo)\\b|mucho tiempo|tanto tiempo|tiempo|rapid|agil|oportun|pronto|pronta|inmediat|urgen|promet|cumpl|pactad|quedaron (en|de)|dijeron que (en|iba|ib|seria|a las|ya|maximo|quedaba)|iban a|plazo|esperando|espera\\b|esperar"],
+    ["visita", "Técnico y visita", "(^|[^a-z ]|\\b(?!soporte |area |problemas? |fallas? |asesor |asesores |apoyo |departamento |linea |conocimiento |conocimientos |ayuda |atencion |orientaciones |informacion )[a-z]+ )tecnic|visita|\\bcitas?\\b|agend|instalador|cuadrilla|operario|domicili|reprogram|presencial|(no|nunca|ni siquiera|nadie|jamas) (\\w+ )?(llego|llegaron|vino|vinieron|fue nadie|aparecio|aparecieron|se present|asistio|asistieron|ha venido|han venido|ha llegado|han llegado|a llegado|han ido|ha ido|fueron|vienen)\\b"],
+    ["contacto", "Contactar a un asesor", "\\bivr\\b|\\bia\\b|inteligencia artificial|conmutador|\\bmenu|marcar|marque|grabacion|robot|\\bbots?\\b|\\bboot|chatbot|maquina|contest|(no|nadie) (me |nos |le )?(atiend|atendi|respond)|atiendan|comunicar|comunico|comunique|comunicarse|comunicacion (con|telefonica|por)|dificil (la )?comunicacion|contactar|contactarse|contactarme|contactarlos|contacto (con|directo|telefonico)|me contacte|hablar con|habla con|llamad|\\bllam(e|o|ar|amos|an|aron|ando|aba|aban|en|o)\\b|en espera|tiempo de espera|minutos (en|de) (espera|linea|la linea|llamada)|colg|cuelg|se (cae|cayo|corta|corto|cortaba) la (llamada|comunicacion)|cort(o|aron|an|aban) la (llamada|comunicacion)|(por|al|via|x|del) (telefono|cel|celular)|telefonic|(la|una|en|esa|esta|por) linea (de|telefonica|\\d|\\*)|lineas? de atencion|\\b611\\b|\\bchat|whats|wasap|wpp|watsap|whasap|guasap|wsp|transfier|transfer|pasan de|pasaron de|de un lado (a|para|al) otro|de asesor en asesor|de area en area|de persona en persona|pelote|lo pasean|repetir|volver a explicar|oficina|punto (fisico|de atencion)|centros? de atencion|\\bapp\\b|aplicacion|canal(es)? de atencion|medios? de (atencion|contacto|comunicacion)|asesor (humano|real|virtual)|persona (real|humana)"],
+    ["asesor", "Trato y saber del asesor", "amabl|cordial|respetu|irrespet|(con|sin|mas|el) respeto|groser|mala gana|actitud|prepotent|despota|displicent|\\btrato\\b|trataron|tratan|empatia|empatic|paciencia|escuch|educad|capacit|preparad|conocimiento|conocen|desconoc|idone|no (sabe|saben|sabia|sabian|supo|supieron|tienen idea|tenia idea)\\b|nadie sabe|guion|libreto|automata|reinici(ar|e|en|o|ando|aron|os|amos)\\b|apag(ar|ue|a|o|en|uen) y (prend|encend)|desconect(ar|e|o|en) y (conect|volv)|mentir|mienten|mentira|mentiros|\\bengan|evasiv|evad|excusa|disposicion|atent[oa]s?\\b|desinteres|no (les |le )?(interesa|importa)|profesional|(buena|mala|pesima|excelente|la|su|muy buena|muy mala|mejor|mejorar la|mas) atencion|explic|claridad|seguimiento|entend|comprens|comprend|irrespons|incompeten|inepto|sincer|honest|dispuest|humano|calidez|vocaliz|serio|seriedad|asesoria"],
+    ["aviso", "Avisos e información", "aviso|avis(ar|aron|en|ara|aran|ado|o)\\b|previo|notific|un comunicado|comunicados|\\bsms\\b|informa(r|cion|ron|ran)\\b|inform(en|aran|aron|aban)\\b|desinform|me informa\\b|no (nos |me |le )?(dicen|dijeron|explicaron|dan|daban|dieron) (cuando|cual|que paso|el tiempo|la hora|nada|el motivo|razon|informacion|explicacion)|da razon|dan razon|tiempo (estimado|aproximado)|cuanto (tiempo|tarda|demora|se demora|dura)|cuando (se )?(restablec|vuelve|soluciona|llega|regresa)|hora (de|aproximada) (solucion|restabl|llegada|reparacion)|falla (masiva|general)|dano (masivo|general)|(falla|dano)s? (en|de) (el|la|mi|toda la) (sector|zona|barrio)|(falla|dano|problema|mantenimiento|arreglo|trabajos?)[^.]{0,20} en (el|la|mi|todo el|toda la) (sector|zona|barrio|ciudad|municipio)|mantenimiento|falta de comunicacion|no (se )?comunican|no (nos )?(comunicaron|comunican)|que (paso|pasaba|estaba pasando)"],
+    ["cobro", "Cobro y compensación", "cobr(?!e\\b|es\\b)|factur|recibo|descuent|compens|ajuste (en|a|al|de) (la |el |mi )?(factura|valor|cobro|cuenta)|reconoc(er|en|an|imiento|ieron) (el|los|la|lo|tiempo|dias|por)|devolu|devuelv(an|en|e)? (el |la |lo |mi |los )?(dinero|plata|valor|pago|cobrado|pagado|dias|tiempo)|reembols|reintegr|abono|nota credito|\\bpag(o|ar|ando|amos|ue|uen|a|an|ado|aremos|amos|o)\\b|pagando|mensualidad|tarifa|precio|\\bvalor(es)?\\b|\\bcaro\\b|costos|cuota|\\bplata\\b|dinero"],
+    ["cancelar", "Cancelar o cambiarse", "cancel(o|are|e|amos|ando|acion|aciones) (el|los|mi|mis|todo|todos|la cuenta|el contrato|contrato|servicio|servicios|claro|con|definitivamente)|\\bcancelar\\b(?! (la |las |el |una )?(visita|cita|orden|reprogram))|(voy|vamos|pienso|quiero|toca|tocara|tendre|tocar|decidi|estoy pensando en|me toco) (a |que |en )?(cancel|retir|cambi)|\\bretir(ar|arme|o|arnos|e|aremos)\\b|cambiar(me|nos)? (de|a otro|a otra) (operador|empresa|compania|proveedor)|(otro|otra) (operador|empresa|compania|proveedor)|competencia|movistar|\\btigo\\b|\\bune\\b|\\betb\\b|\\bwom\\b|\\bme (voy|ire|pase|pasare|cambie|cambiare|cambio|paso) (de claro|a (otro|otra|tigo|movistar|etb|une|wom))|\\bme voy de\\b|\\bme voy\\b[^.]{0,20}(empresa|operador|compania)|dar de baja|doy de baja|terminar (el|mi) contrato|clausula|permanencia"],
+    ["elogio", "Elogios", "^(?!\\W*(\\w+(ando|endo|iendo)(le|les|lo|los|la|las|nos|me|se)?|que|cumpla|cumplan|hagan|haga|den|sean|sea|tengan|pongan|brinden|ofrezcan|con|mas|mejor|tener|ser|dar|brindar|cumplir|mejorar|proveer\\w*|ofrecer|deberia\\w*|poder|necesito|ojala|quisiera|efectividad|agilidad|rapidez|eficiencia)\\b)(?![\\s\\S]*\\b(no|nada|poco|ni|nunca|nadie|ningun|ninguno|ninguna|sin|sigue|siguen|pesim\\w*|terrible|mal|mala|malo|falta|deberian|deben|deberia|mejorar|ser mas|sean mas|mas|momentane\\w*|tampoco|aun|todavia|pero|para que|toca|cansad\\w*|dificil|deficien\\w*|desconexion|quejas?|intermit\\w*|debil|lent[oa]|necesito|ojala|deberian|quien falla)\\b)[\\s\\S]*(excelent|exelent|muy (bien|buen|amable|rapid|atent|agil|eficien|profesional|clar|oportun|satisfech|amabl|diligent|efectiv)|buen(a|o|as|os)? (servicio|atencion|asesor|trato|experiencia|tecnico|soporte|respuesta|disposicion|gestion|solucion|trabajo|actitud|asesoria)|amabl|cordial|felicit|agradec|gracias|satisf|recomend|\\beficien|efectiv|rapid|agil|oportun|diligent|todo bien|perfect|genial|bien atendid|atento|atenta|(me|lo|la|nos|se) (solucionaron|soluciono|resolvieron|resolvio|arreglaron|arreglo)\\b|todo (solucionado|resuelto|arreglado|ok)|quedo (solucionad|funcionando|bien|resuelt)|\\bbuen[oa]?s?\\b|\\bbien\\b|\\bsuper\\b|chevere|contento|content[oa]|\\bfelic|maravill|espectacular|^\\W*10\\W*$|\\bun 10\\b|10 de 10)"]
+  ];
+  const stop = {}; "abril agosto alguien aparte brinda brindan brindar brindaron brinden brindo buenas buenos casa caso casos clientes cuenta dado dando decia decian deja dejan dejando dejar dejaron dejo demasiada demasiadas demasiado demasiados diciembre dieron digo dije dijeron domingo enero febrero fin hacen hacia haga hagan hago hecho hiciera hicieron hogar hoy jueves julio junio lleva llevaba llevamos llevan llevo lunes manera martes marzo mayo mejor mejorando mejorar mejore mejoren menos mes meses miercoles momento momentos mucha muchas muchisima muchisimo necesita necesitamos necesito ningun noches nosotros noviembre nuevamente octubre ok parece pasa pasado paso podemos poder podido porfavor posible presenta presentaba presentada presentadas presentado presentan presentando presentar presentaron presento pude pudieron pudo puedo queda quedaron quedo realiza realizar realizaron realizo realmente sabado sabe saber seguimos senores senorita septiembre setiembre siendo sigo siquiera situacion tampoco tanta tantos tardes tema temas toca tocaba tocado toco toda todas todavia tres usuarios varias varios ver verdad viernes".split(' ').forEach(w => { stop[w] = 1; });
+  // Formas que se cuentan como una sola palabra (llamaron → llamada, vino → llegó, wpp → whatsapp…)
+  const unir = {}; Object.entries({
+    llamada: "llamar llame llama llaman llamo llamaron llamado llamando llamamos llamaba llamaban llamen llamarme llamaran llamare llamarlos",
+    atiende: "atender atendio atendieron atendiera atienda atiendan atendida atendido atendiendo atendian atendia",
+    demora: "demoran demoro demoraron demorado demorada demorados demorando demore demorar demoraba demoren",
+    espera: "esperando esperar espere esperamos esperaba esperan esperen esperarlo esperandolo",
+    llego: "llegaron llegan llega llegado llegar llegue llegaba llegara vino vinieron venido venir vienen viene vengan venia venian",
+    falla: "fallando fallo fallan fallar fallaba fallado",
+    whatsap: "wasap watsap wpp wsp whasap whatsaap whats wapp guasap whatssap wathsapp",
+    bot: "bots boot chatbot robot robots robotizado robotizada",
+    contest: "respond responde responden respondieron responder respondio respondan",
+    trabajo: "trabajar trabajamos trabaja trabajando trabajan",
+    cambiar: "cambio cambien cambie cambios cambiado",
+    rapido: "rapida rapidas rapidez",
+    reporta: "reporte reportes",
+    arregla: "arreglo arreglen arreglos",
+    resolve: "resolvieron resolvio resuelven resuelto resuelta resueltos resuelva resuelvan resolviendo",
+    malo: "mala malas"
+  }).forEach(([k, ws]) => ws.split(' ').forEach(w => { unir[w] = k; }));
+  return {categorias: cats.map(([k, nombre, re]) => ({k, nombre, re: new RegExp(re)})), stop, unir, otros: 'Otros temas',
+    nota: v => (v.q2 != null && v.q2 >= 0 ? v.q2 / 10 : null)};
+})();
+// Nube: un contenedor fijo (sobrevive a los repintados de la pestaña, así nube.js no suma escuchas en cada repintado)
+const exEst = {lente: '', q: '', nube: {}, items: null, ancho: 0}, nubeEl = document.createElement('div');
+const PREG = Object.fromEntries(D.cod_preguntas.map((c, i) => [c, D.preguntas[i]]));
+const etqNotaNube = x => `recomendación media ${f1(x * 10)} de 10`;
+const metaCom = v => { const e = V.estudio[v.r[DI.estudio]], m = V.marcacion[v.r[DI.marcacion]];
+  return `<i class="punto" style="background:${CE[e]}"></i> ${esc(e)} · ${mesC(PERIODOS[v.r[0]])} · <span ${tipAttr(esc(PREG[v.preg] || v.preg))}>${esc(v.preg)}</span> · ${esc(m)}`; };
+// Parte en palabras y clasifica todos los comentarios por tandas cortas mientras se ve otra pestaña (en Soporte-FM son
+// ~25.000; de una vez toma más de medio segundo). Así, al abrir Voces con todos los meses, la nube solo cuenta.
+function calentarNube(i = 0) {
+  if (!window.NUBE || !C || i >= C.length) return;
+  const fin = Math.min(C.length, i + 1200);
+  for (let j = i; j < fin; j++) NUBE.preparar(C[j], NUBE_CFG);
+  setTimeout(() => calentarNube(fin), 40);
+}
+function montarNube(quieto) {
+  if (!window.NUBE) { nubeEl.innerHTML = '<p class="vacio">Falta nube.js junto al tablero.</p>'; return; }
+  NUBE.montar(nubeEl, {items: exEst.items, cfg: NUBE_CFG, estado: exEst.nube, etqNota: etqNotaNube, chip: chipNota, meta: metaCom, quieto: !!quieto});
+  exEst.ancho = nubeEl.clientWidth;
+}
+function vVoz(p, o = {}) {
   const idx = filas(), a = sumar(idx);
   const EMO_C = ['var(--d-2)', 'var(--d-2)', 'var(--d-1)', 'var(--d-1)', 'var(--d0)', 'var(--d1)', 'var(--d1)', 'var(--d2)', 'var(--d2)'];
   const emos = D.emociones.map((e, i) => ({nombre: e, c: a['emo_' + i], i})).filter(x => x.c), be = emos.reduce((s, x) => s + x.c, 0);
-  const ej = C ? ejemplos(exEst.lente || null, exEst.ver, norm(exEst.q)) : null;
+  // Comentarios de la nube: filtros globales + tipo + búsqueda; los vacíos o genéricos («ninguna», «ok», «bien») se cuentan pero no entran
+  let total = 0;
+  if (C) { const L = exEst.lente ? LENTES[exEst.lente] : null, q = norm(exEst.q); exEst.items = [];
+    for (const v of C) if (pasaCom(v, L, q)) { total++; if (util(v)) exEst.items.push(v); } }
+  const fuera = C ? total - exEst.items.length : 0;
   p.innerHTML = `
     <div class="g g2"><section class="panel"><header><h2>Emociones</h2><p class="sub">Q5 · rojo = negativas, verde = positivas.</p></header>${G.paletas(emos, be, {color: x => EMO_C[x.i]})}</section>
       <section class="panel"><header><h2>Cómo mejorar al asesor</h2><p class="sub">Temas de Qualtrics en Q10 · % sobre ${f0(a.com_q10)} encuestas con comentario.</p></header>${G.paletas(temas(TM, D.temas.mejora, idx), a.com_q10, {color: () => 'var(--cat)'})}</section></div>
-    <section class="panel"><header><h2>Explorador de comentarios</h2><span class="nota">${ej ? f0(ej.total) + ' comentarios' : 'Cargando…'}</span></header>
+    <section class="panel"><header><h2>Nube de comentarios</h2><span class="nota" ${C ? tipAttr(`${f0(total)} comentarios con estos filtros. ${fuera ? `${f0(fuera)} no dicen nada concreto («ninguna», «ok», «bien»…) y no entran en la nube.` : ''} Datos personales tapados.`) : ''}>${C ? `${f0(exEst.items.length)} comentarios${fuera ? ` · ${f0(fuera)} sin contenido fuera` : ''}` : 'Cargando…'}</span>
+      <p class="sub">Cada comentario cae en uno o varios temas. Elige un tema a la izquierda o una palabra para leer los comentarios que más se repiten.</p></header>
       <div class="ex-herr"><input type="search" id="ex-q" placeholder="Buscar: visita, técnico, whatsapp, factura…" value="${esc(exEst.q)}" aria-label="Buscar en comentarios">
         <div class="seg" role="group" aria-label="Tipo"><button type="button" data-l="" aria-pressed="${!exEst.lente}">Todos</button>${Object.entries(LENTES).map(([k, l]) => `<button type="button" data-l="${k}" aria-pressed="${exEst.lente === k}">${l.t}</button>`).join('')}</div></div>
-      <div class="ex">${ej == null ? Array(6).fill('<div class="esqueleto"></div>').join('') : ej.items.map(v => tarjeta(v, exEst.q)).join('') || '<p class="vacio">Sin comentarios</p>'}</div>
-      ${ej && ej.total > ej.items.length ? `<button type="button" class="mas" id="ex-mas">Ver más (${f0(ej.total - ej.items.length)} restantes)</button>` : ''}</section>`;
+      <div id="ex-nube">${C ? '' : '<div class="nb-esq"><div class="esqueleto"></div><div class="esqueleto"></div></div>'}</div></section>`;
+  if (C) { const ph = p.querySelector('#ex-nube'); ph.appendChild(nubeEl); montarNube(o.quieto); }
   const q = p.querySelector('#ex-q'); let t;
-  q.oninput = () => { clearTimeout(t); t = setTimeout(() => { exEst.q = q.value.trim(); exEst.ver = 36; pintarTab({anim: false}); const n = p.querySelector('#ex-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
-  p.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { exEst.lente = b.dataset.l; exEst.ver = 36; pintarTab({anim: false}); });
-  p.querySelector('#ex-mas')?.addEventListener('click', () => { exEst.ver += 36; pintarTab({anim: false}); });
+  q.oninput = () => { clearTimeout(t); t = setTimeout(() => { exEst.q = q.value.trim(); pintarTab({anim: false, quieto: true}); const n = p.querySelector('#ex-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
+  p.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { exEst.lente = b.dataset.l; pintarTab({anim: false}); });
 }
 function vCalidad(p) {
   const per = PERIODOS[st.periodo], inf = D.periodos[per], o = {error: 0, aviso: 1, ok: 2}, ico = {ok: '✓', aviso: '!', error: '✕'};
@@ -630,7 +787,7 @@ const VISTAS = {resumen: vResumen, facilidad: vFacilidad, resolucion: vResolucio
 // o.anim = false: repinta en el estado final, sin animar (tema, buscador de Voces, comentarios)
 function pintarTab(o = {}) {
   const p = document.getElementById('p-' + st.tab);
-  VISTAS[st.tab](p);
+  VISTAS[st.tab](p, o);
   montarRanking(p); montarCarrusel(p); dibujarLineas(p);
   p.querySelectorAll('[data-cajon]').forEach(b => b.onclick = () => abrirCajon(b.dataset.cajon));
   if (o.anim !== false) G.animar(p);
@@ -694,7 +851,7 @@ function pintarDescarga() {
     <div><div class="et-dl">Formato</div><div class="seg" role="group" aria-label="Formato"><button type="button" data-f="xlsx" aria-pressed="${dlEst.formato === 'xlsx'}" title="Libro de Excel (.xlsx)">Excel</button><button type="button" data-f="csv" aria-pressed="${dlEst.formato === 'csv'}" title="Texto separado por punto y coma">CSV</button><button type="button" data-f="parquet" aria-pressed="${dlEst.formato === 'parquet'}" title="Columnar y comprimido, para Python o Power BI">Parquet</button></div></div>
     <div class="resumen-dl"><b>${f0(n)} encuestas</b>${esc(filtrosTxt())}</div>
     <button type="button" class="ir"${n ? '' : ' disabled'}><span>Descargar ${dlEst.formato === 'xlsx' ? 'Excel' : dlEst.formato.toUpperCase()}</span></button>
-    <p class="nota" style="margin:0">Una fila por encuesta con indicadores, segmentos y comentarios. Sin datos personales: no trae nombre, teléfono, correo, cédula ni cuenta; los comentarios van con [nombre], [#] y [correo] tapados.</p>`;
+    <p class="nota" style="margin:0">Una fila por encuesta con cuenta, teléfono y correo, indicadores, segmentos, clasificación de red (HFC, FTTH propia o neutra, DTH), categoría_dolor y comentarios (con [nombre], [#] y [correo] tapados). Trae datos personales: compártela solo con quien deba contactar al cliente.</p>`;
   dlPop.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { dlEst.alcance = b.dataset.a; pintarDescarga(); });
   dlPop.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { dlEst.formato = b.dataset.f; pintarDescarga(); });
   dlPop.querySelector('.ir').onclick = e => descargarBase(e.currentTarget);
@@ -705,12 +862,20 @@ const cargarBase = p => new Promise((ok, mal) => {
   sc.onload = () => window.BASE?.[p] ? ok(window.BASE[p]) : mal(new Error(p)); sc.onerror = () => mal(new Error(p));
   document.body.appendChild(sc);
 });
+// Cuenta, teléfono y correo van en contacto/AAAAMM.js (por ID de respuesta) y se pegan después del ID al descargar
+const cargarContacto = p => new Promise(ok => {
+  if (window.CONTACTO?.[p]) return ok(window.CONTACTO[p]);
+  const sc = document.createElement('script'); sc.src = `contacto/${p}.js`;
+  sc.onload = () => ok(window.CONTACTO?.[p] || {}); sc.onerror = () => ok({});   // sin archivo: columnas vacías
+  document.body.appendChild(sc);
+});
+const VACIO_C = D.base.contacto.map(() => '');
 const lineaCSV = f => f.map(v => /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v).join(';');
 async function descargarBase(btn) {
   if (btn.dataset.estado === 'trabajando') return;
   const txt = btn.querySelector('span'), etq = txt.textContent, aviso = (e, t, p) => { btn.dataset.estado = e; txt.textContent = t; btn.style.setProperty('--p', (p ?? 0) + '%'); };
   try {
-    const cols = D.base.columnas, ci = c => cols.indexOf(c), ps = dlPeriodos();
+    const cols = [D.base.columnas[0], ...D.base.contacto, ...D.base.columnas.slice(1)], ci = c => cols.indexOf(c), ps = dlPeriodos();
     const conds = [];
     if (st.estudio != null) { const j = ci(D.base.filtro.estudio), v = EST[st.estudio]; conds.push(r => r[j] === v); }
     for (const [k] of MULTI) if (st[k].size) { const j = ci(D.base.filtro[k]), vs = new Set([...st[k]].map(i => V[k][i])); conds.push(r => vs.has(r[j])); }
@@ -718,7 +883,8 @@ async function descargarBase(btn) {
     let n = 0;
     for (let i = 0; i < ps.length; i++) {
       aviso('trabajando', `Preparando ${Math.round(i / ps.length * 100)} %`, i / ps.length * 100);
-      const rows = (await cargarBase(ps[i])).filter(r => conds.every(c => c(r)));
+      const [b, ct] = await Promise.all([cargarBase(ps[i]), cargarContacto(ps[i])]);
+      const rows = b.map(r => [r[0], ...(ct[r[0]] || VACIO_C), ...r.slice(1)]).filter(r => conds.every(c => c(r)));
       for (let j = 0; j < rows.length; j += 5000) await w.agregar(rows.slice(j, j + 5000).map(lineaCSV));
       n += rows.length;
     }
@@ -748,7 +914,7 @@ function pintarTema() {
 btnTema.onclick = () => {
   const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = t; try { localStorage.setItem('sopfm-tema', t); } catch (e) { /* sin almacenamiento */ }
-  pintarTema(); pintarTab({anim: false});
+  pintarTema(); pintarTab({anim: false, quieto: true});
 };
 
 // ------------------------------------------------------------------ ciclo
@@ -768,6 +934,10 @@ pintarTema(); refrescar();
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
   const h = document.documentElement; h.setAttribute('data-sin-anim', '');
   dibujarLineas(document.getElementById('p-' + st.tab)); if (cajon.dataset.k) dibujarLineas(cajon);
+  // La nube se acomoda al ancho nuevo (solo si cambió: en el celular la barra de direcciones dispara resize al hacer scroll)
+  if (st.tab === 'voz' && nubeEl.isConnected && Math.abs(nubeEl.clientWidth - exEst.ancho) > 8) montarNube(true);
   h.removeAttribute('data-sin-anim'); }, 150); });
 addEventListener('hashchange', () => { leerHash(); refrescar(); });
+// Al imprimir, la nube sale completa aunque nunca haya entrado en pantalla (sus palabras esperan a verse para animarse)
+addEventListener('beforeprint', () => { if (st.tab === 'voz' && nubeEl.isConnected) montarNube(true); });
 })();

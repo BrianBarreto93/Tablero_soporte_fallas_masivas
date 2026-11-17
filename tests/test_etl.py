@@ -226,3 +226,34 @@ def test_dolores_cuadran_con_deck(estudio, clave, n, brecha):
     nps = lambda x: (x[1] - x[2]) / x[0] * 100
     assert con[0] == n
     assert round(nps(sin) - nps(con)) == brecha
+
+
+# ------------------------------------------------------------------ base: clasificación de red, categoría_dolor y contacto
+def test_clasificacion_red():
+    from etl import red
+    c = pd.concat([_crudo(TIPO_RED="BIDIRECCIONAL", NUMERO_CUENTA="1", NODO="N1"),
+                   _crudo(RESPONSEID="R_2", TIPO_RED="FTT", NUMERO_CUENTA="2", NODO="N1"),       # por cuenta
+                   _crudo(RESPONSEID="R_3", TIPO_RED="FTT", NUMERO_CUENTA="3", NODO="N2"),       # cuenta fuera de la vista: por nodo
+                   _crudo(RESPONSEID="R_4", TIPO_RED="FTT", NUMERO_CUENTA="4", NODO="N9"),       # ni cuenta ni nodo
+                   _crudo(RESPONSEID="R_5", TIPO_RED="1/31/2025", NUMERO_CUENTA="5", NODO="N1"),  # sin dato, FTTH después de la encuesta
+                   _crudo(RESPONSEID="R_6", TIPO_RED="1/31/2025", NUMERO_CUENTA="2", NODO="N1")], ignore_index=True)
+    d = limpiar(c)
+    yb = {"cuentas": pd.DataFrame({"clase": ["FTTH propia", "FTTH neutra"], "desde": pd.to_datetime(["2024-01-01", "2026-12-01"])},
+                                  index=[2, 5]),
+          "nodos": pd.Series({"N1": "FTTH propia", "N2": "FTTH neutra"})}
+    assert list(red.clasificar(c, d, yb)) == ["HFC", "FTTH propia", "FTTH neutra", red.SIN_CLASIFICAR, "Sin dato", "FTTH propia"]
+    assert list(red.clasificar(c, d, None))[:2] == ["HFC", red.SIN_CLASIFICAR]
+
+
+def test_categoria_dolor():
+    c = pd.concat([_crudo(Q3="Nadie contesta y se corta la llamada", Q8="No"), _crudo(RESPONSEID="R_2")], ignore_index=True)
+    cat = dolores.categoria(dolores.marcar(c, limpiar(c)))
+    assert list(cat) == ["Difícil llegar a un asesor | La falla sigue", dolores.SIN_DOLOR]
+
+
+def test_contacto_va_aparte():
+    from etl import base
+    c = _crudo(NUMERO_CUENTA="12345678", RECIPIENTPHONE="573001234567", RECIPIENTEMAIL=" Ana@Correo.COM ")
+    assert base.contacto(c, limpiar(c)) == {"R_1": ["12345678", "3001234567", "ana@correo.com"]}
+    if OCT.exists():   # la cuenta y el correo no llegan a lo versionado (data/periodos)
+        assert "@" not in json.dumps(json.loads(OCT.read_text(encoding="utf-8"))["base"])

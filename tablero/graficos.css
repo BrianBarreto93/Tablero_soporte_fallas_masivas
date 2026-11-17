@@ -95,25 +95,23 @@
 .g-radial-l b{font:800 12px var(--f-ui);font-variant-numeric:tabular-nums;text-align:right}
 .g-radial-l small{grid-column:3;text-align:right;color:var(--ink-3);font-size:10.5px;margin-top:-5px}
 
-/* Brecha (columnas con dos puntos) */
-.g-brecha{display:grid;gap:8px}
-.g-br-ley{display:flex;gap:14px;font-size:11.5px;color:var(--ink-2)}
-.g-br-ley i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
-.g-br-area{position:relative;display:flex;gap:10px;padding:8px 0 0 44px;margin-top:6px}
-.g-br-guias{position:absolute;left:44px;right:0;top:8px;height:220px;pointer-events:none}
-.g-guia{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--line-2)}
-.g-guia.cero{border-top:1.5px solid var(--eje)}
-.g-guia em{position:absolute;left:-44px;top:-7px;width:26px;text-align:right;font:600 10px var(--f-ui);font-style:normal;color:var(--ink-3)}
-.g-br-col{flex:1;display:grid;grid-template-rows:220px auto;gap:8px;min-width:0}
-.g-br-pista{position:relative;height:220px}
-.g-br-tallo{position:absolute;left:50%;width:10px;margin-left:-5px;border-radius:6px;background:linear-gradient(0deg,var(--t0),var(--t4),var(--t8));opacity:.85}
-.g-br-pt{position:absolute;left:50%;width:18px;height:18px;margin:0 0 -9px -9px;border-radius:50%;border:3px solid var(--panel);box-shadow:0 2px 10px rgba(0,0,0,.18);cursor:default}
-.g-br-pt.bueno{background:var(--t8)}.g-br-pt.malo{background:var(--t0)}
-.g-br-pt em{position:absolute;left:20px;top:-2px;font:900 13px var(--f-num);font-style:normal;white-space:nowrap;color:var(--ink)}
-.g-br-chip{position:absolute;right:50%;margin:0 14px -11px 0;padding:3px 8px;border-radius:999px;background:var(--ink);color:var(--panel);font:900 12px var(--f-num);white-space:nowrap}
-.g-br-pie{text-align:center;display:grid;gap:1px}
-.g-br-pie b{font:800 13px var(--f-ui)}
-.g-br-pie small{color:var(--ink-3);font-size:10.5px}
+/* Brecha (NPS de la buena condición frente a la mala, barras desde 0) */
+.g-brecha{display:grid;gap:14px}
+.g-br-gs{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px 28px}
+.g-br-g{display:grid;gap:6px;align-content:start}
+.g-br-tit{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.g-br-tit b{font:800 13.5px var(--f-ui)}.g-br-tit small{color:var(--ink-3);font-size:11px}
+.g-br-fila{display:grid;grid-template-columns:minmax(92px,.9fr) minmax(90px,1.6fr) 62px;gap:12px;align-items:center;font-size:12px}
+.g-br-fila .et{font-weight:700;line-height:1.25;display:flex;gap:6px;align-items:center}
+.g-br-fila .et i{flex:none;width:10px;height:10px;border-radius:50%}
+.g-br-fila .bueno{background:var(--t8)}.g-br-fila .malo{background:var(--t0)}
+.g-br-pista{position:relative;height:18px;background:var(--panel-3);border-radius:4px}
+.g-br-pista::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1.5px;margin-left:-.75px;background:var(--eje);z-index:1}
+.g-br-pista b{position:absolute;top:0;bottom:0;min-width:2px}
+.g-br-pista b[style*="left"]{border-radius:0 4px 4px 0}.g-br-pista b[style*="right"]{border-radius:4px 0 0 4px}
+.g-br-fila .num{text-align:right;font:900 13px var(--f-num);font-variant-numeric:tabular-nums}
+.g-br-fila .num small{display:block;font:600 10.5px var(--f-ui);color:var(--ink-3)}
+.g-br-frase{margin:2px 0 0;font-size:12px;color:var(--ink-2)}.g-br-frase b{color:var(--ink)}
 .g-br-nota{margin:0}
 
 /* Relojes */
@@ -137,7 +135,6 @@
 @media (max-width:760px){
   .g-radial{grid-template-columns:1fr}
   .g-radial svg{max-width:220px;justify-self:center}
-  .g-br-col{grid-template-rows:180px auto}.g-br-pista,.g-br-guias{height:180px}
 }
 @media (prefers-reduced-motion:reduce){
   .g-pt,.g-dona-svg circle,.g-radial circle,.g-pal-p b i{transition:none}

@@ -4,7 +4,7 @@ import os
 import oracledb
 import pandas as pd
 
-from etl.config import CLAVE_CUENTA, COLUMNAS, COLUMNAS_SOLO_LIMPIEZA, RAIZ, TABLA
+from etl.config import CLAVE_CUENTA, COLUMNAS, COLUMNAS_CONTACTO, COLUMNAS_SOLO_LIMPIEZA, RAIZ, TABLA
 
 
 def _load_env(path=RAIZ / ".env"):
@@ -49,8 +49,8 @@ def columnas_tabla(conn):
 
 
 def encuestas(conn):
-    """Respuestas con la lista blanca de columnas (+ nombres solo para limpiar comentarios)."""
-    cols = ", ".join(COLUMNAS + COLUMNAS_SOLO_LIMPIEZA)
+    """Respuestas con la lista blanca de columnas (+ nombres solo para limpiar comentarios y contacto para la base)."""
+    cols = ", ".join(COLUMNAS + COLUMNAS_SOLO_LIMPIEZA + COLUMNAS_CONTACTO)
     return _df(conn, f"SELECT {cols} FROM {TABLA}")
 
 

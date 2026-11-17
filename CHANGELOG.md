@@ -1,5 +1,15 @@
 # Cambios
 
+## 2026-11-17 · v6
+
+- Base descargable con **cuenta, teléfono y correo** (después del ID), **Clasificación de red** (HFC, FTTH propia,
+  FTTH neutra, DTH; `etl/red.py` con Yellowbrick) y **categoría_dolor** (los 9 dolores del tablero, separados por «|»;
+  «Sin dolor identificado» si no hay). Los datos de contacto van en `tablero/contacto/` (fuera de git).
+- Resumen: la caja «Soporte vs Falla masiva» pasa a **Alarmas** de NPS, CES, Funcionando y Asesor, según los filtros
+  (caídas y mejoras fuera del margen de error, rachas, mínimos, segmentos que caen o quedan bajo el total, dolores que suben).
+- Datos hasta el 17-nov-2026 (noviembre parcial, 568 encuestas). Octubre se recargó en Oracle el 17-nov sin cambios.
+- Incluye la nube de comentarios de Voces (`nube.js/css`) y la brecha en barras, que estaban sin commit.
+
 ## 2026-11-13 · v5
 
 - Gráficos animados con Motion (`tablero/vendor/motion.js`, copia local: funciona sin internet). La librería

@@ -28,6 +28,13 @@ REGLAS = {
     'cobro': ('Después', r'cobr|factur|pag(o|ar|ando) (por|un|el|toda|completo|igual)|descuent|compens|ajuste|reconoc|devolu|reembols|reintegr|no prestaron|abono|nota credito'),
 }
 CLAVES = list(REGLAS)
+# Nombre corto de cada dolor para la columna categoría_dolor de la base (mismo sentido que los títulos del tablero)
+NOMBRES = {
+    'aviso': 'Sin aviso ni hora de solución', 'contacto': 'Difícil llegar a un asesor', 'asesor': 'El asesor no resuelve',
+    'visita': 'Técnico no llega o no resuelve', 'tiempo': 'Días sin solución', 'promesa': 'Promesa incumplida',
+    'persiste': 'La falla sigue', 'recurrente': 'La falla vuelve', 'cobro': 'Cobro sin servicio',
+}
+SIN_DOLOR = "Sin dolor identificado"
 _RX = {k: re.compile(v) for k, (_, v) in REGLAS.items()}
 
 
@@ -46,3 +53,8 @@ def marcar(crudo, d):
     m["persiste"] |= d.q8.eq(0)
     m["alguno"] = m[CLAVES].any(axis=1)
     return m
+
+
+def categoria(m):
+    """Texto con los dolores de cada encuesta, separados por « | » (orden del recorrido: antes, durante, después)."""
+    return m[CLAVES].apply(lambda f: " | ".join(NOMBRES[k] for k in CLAVES if f[k]) or SIN_DOLOR, axis=1)

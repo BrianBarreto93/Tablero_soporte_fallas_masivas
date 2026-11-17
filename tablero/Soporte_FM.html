@@ -143,7 +143,7 @@ button{cursor:pointer}
 .g-1-2{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
 
 /* Resumen: llena el alto disponible en el lienzo de 1000 × 800 */
-#p-resumen{grid-template-rows:auto 310px auto auto}
+#p-resumen{grid-template-rows:auto minmax(310px,auto) auto auto}
 
 /* KPI */
 .kpis{display:grid;grid-template-columns:1.35fr 1fr 1fr 1fr;gap:14px}
@@ -181,19 +181,23 @@ svg .grid{stroke:var(--grid)} svg .eje{stroke:var(--eje)}
 .equiv[open] summary{color:var(--ink)}
 .equiv[open] .tw{position:absolute;z-index:30;right:14px;left:14px;margin-top:6px;max-height:320px;overflow:auto;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radio-s);box-shadow:var(--sombra);padding:6px 8px}
 
-/* Soporte vs Falla masiva */
-.vs{display:grid;gap:4px;flex:1;align-content:space-around}
-.vs .f{display:grid;grid-template-columns:86px minmax(0,1fr) 64px;align-items:center;gap:10px}
-.vs .n{font:800 12px var(--f-ui)}
-.vs .n small{display:block;font-weight:600;color:var(--ink-3);font-size:10.5px}
-.vs .b{text-align:right;font:900 14px var(--f-num);font-variant-numeric:tabular-nums}
-.vs .b small{display:block;font:700 10px var(--f-ui);color:var(--ink-3)}
-.pesa{position:relative;height:26px}
-.pesa .riel{position:absolute;left:0;right:0;top:11px;height:4px;border-radius:2px;background:var(--panel-3)}
-.pesa .cero{position:absolute;top:4px;bottom:4px;width:1px;background:var(--eje)}
-.pesa .une{position:absolute;top:12px;height:2px;background:var(--ink-3)}
-.pesa .pt{position:absolute;top:5px;width:16px;height:16px;margin-left:-8px;border-radius:50%;border:2px solid var(--panel)}
-.pesa .pt.hueco{background:var(--panel)!important;border-width:3px}
+/* Alarmas: crítica = rojo de la rampa, a vigilar = arena, mejora = verde */
+.alarmas{--al-alta:var(--t0);--al-media:var(--t4);--al-bien:var(--t8)}
+.al-cont{display:flex;flex-wrap:wrap;gap:6px}
+.al-c{font:800 11px/1 var(--f-ui);padding:5px 9px;border-radius:999px;color:#fff}
+.al-c.alta{background:var(--al-alta)}.al-c.media{background:var(--al-media);color:#2b2112}.al-c.bien{background:var(--al-bien)}
+.al-lista{list-style:none;margin:0;padding:0 2px 0 0;display:grid;gap:6px;max-height:416px;overflow-y:auto;scrollbar-width:thin}
+.al{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px 8px 0;border-radius:var(--radio-s);background:var(--panel-2)}
+.al-p{align-self:stretch;border-radius:0 3px 3px 0;background:var(--al-alta)}
+.al.media .al-p{background:var(--al-media)}.al.bien .al-p{background:var(--al-bien)}
+.al-t{font:800 12.5px/1.3 var(--f-ui);display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 7px}
+.al-e{font:800 9.5px/1 var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--c);border:1px solid var(--c);border-radius:4px;padding:2px 4px}
+.al-x p{margin:2px 0 0;font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.al-f{border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);border-radius:999px;font:800 11px var(--f-ui);padding:5px 10px;white-space:nowrap}
+.al-f:hover,.al-f[aria-pressed="true"]{border-color:var(--ink-3);color:var(--ink)}
+.al-ok{margin:auto 0;padding:18px 14px;border-radius:var(--radio-s);background:var(--panel-2);color:var(--ink-2);font-size:12.5px}
+.al-ok b{color:var(--al-bien)}
+@media (max-width:760px){.al{grid-template-columns:4px minmax(0,1fr)}.al-f{grid-column:2;justify-self:start}}
 
 /* Carrusel de voces (tipo Netflix) */
 .voces{position:relative;min-width:0}
@@ -269,7 +273,6 @@ table.rk{width:100%;border-collapse:collapse;font-size:12px}
 .ex-herr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .ex-herr input[type=search]{flex:1 1 240px;height:34px;border:1px solid var(--line-2);border-radius:999px;padding:0 16px;background:var(--panel-2);font-weight:600;outline:none}
 .ex-herr input[type=search]:focus{border-color:var(--ink-3)}
-.ex{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 mark{background:var(--ojo);color:#111;border-radius:3px;padding:0 2px}
 
 /* Calidad */
@@ -416,6 +419,7 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 @media print{.rail,.top{display:none}.app{display:block}}
 </style>
 <link rel="stylesheet" href="graficos.css">
+<link rel="stylesheet" href="nube.css">
 <style>
 /* ===== Ajustes de este tablero sobre graficos.css (va después para ganar) ===== */
 /* KPI: el anillo vive en la esquina; la etiqueta no se mete debajo */
@@ -442,11 +446,8 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 .g-tira span.g-centro{border-radius:2px}
 /* Dolores: los puntos se centran con márgenes (la animación «pop» usa transform) */
 .pz .pt{transform:none;margin:-6.5px 0 0 -6.5px}
-/* Resolución: brecha más alta para que acompañe a la composición */
-.res-br .g-br-col{grid-template-rows:370px auto}
-.res-br .g-br-pista,.res-br .g-br-guias{height:370px}
-.res-br .g-brecha{flex:1;align-content:space-between}
-@media (max-width:1300px){.res-br .g-br-col{grid-template-rows:280px auto}.res-br .g-br-pista,.res-br .g-br-guias{height:280px}}
+/* Resolución: las brechas en una sola columna para que el panel acompañe a la composición */
+.res-br .g-br-gs{grid-template-columns:minmax(0,1fr)}
 /* Composición: donas arriba, waffles abajo, tres por fila */
 .comp-b+.comp-b{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .comp-b h3{margin:0 0 2px;font:800 11px/1.2 var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
@@ -455,13 +456,20 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 .comp .g-dona-c b{font-size:24px}
 .comp .g-celdas{max-width:150px}
 .comp .g-fin{font-size:20px}
+/* Voces: nube.js marca lo elegido con la clase «sel», que aquí es el estilo del selector de mes (alto fijo de 32 px) */
+.nb .sel{height:auto}
+/* Voces: esqueleto de la nube mientras llega comentarios.js (lista de temas + nube) */
+.nb-esq{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:22px}
+.nb-esq .esqueleto:first-child{min-height:360px}.nb-esq .esqueleto:last-child{min-height:420px}
+@media (max-width:900px){.nb-esq{grid-template-columns:1fr}.nb-esq .esqueleto:first-child{min-height:160px}}
 /* Cajón: relojes del asesor en una fila */
 .cajon .g-relojes{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .cajon .g-reloj figcaption b{font-size:11.5px}
 .cajon .g-reloj figcaption span{flex-wrap:wrap;gap:0 5px}
 @media (max-width:760px){
   .cajon .g-relojes{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .res-br .g-br-col{grid-template-rows:220px auto}.res-br .g-br-pista,.res-br .g-br-guias{height:220px}
+  /* Pestaña de comentarios de la nube: encima de la barra de secciones fija de abajo, no detrás */
+  .nb .nb-pop{bottom:calc(76px + env(safe-area-inset-bottom));max-height:min(72vh,calc(100vh - 190px))}
 }
 </style>
 </head>
@@ -498,6 +506,7 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
 <script src="exportar.js"></script>
 <script src="vendor/motion.js"></script>
 <script src="graficos.js"></script>
+<script src="nube.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -243,27 +243,26 @@ function radial(items, base, o) {
     '<ol class="g-radial-l">' + etq + '</ol></div>' + (resto > 0 ? '<p class="nota">Y ' + resto + ' más con menos encuestas.</p>' : '');
 }
 
-// ------------------------------------------------------------------ brecha: columnas con dos puntos (mala condición vs buena)
-// grupos = [{nombre, sub, bueno:{v,n}|null, malo:{v,n}|null}]; o = {min, max, etqBueno, etqMalo, unidad, ref:[valores de guía]}
+// ------------------------------------------------------------------ brecha: NPS de la buena condición frente a la mala, en barras
+// Barras horizontales desde 0 (verde a la derecha si es positivo, rojo a la izquierda si es negativo) y una frase con la diferencia.
+// grupos = [{nombre, sub, bueno:{v,n}|null, malo:{v,n}|null}]; o = {etqBueno, etqMalo, unidad}
 function brecha(grupos, o) {
-  var min = o.min == null ? -100 : o.min, max = o.max == null ? 100 : o.max, Y = function (v) { return (v - min) / (max - min) * 100; };
-  var guias = (o.guias || (min < 0 ? [-100, -50, 0, 50, 100] : [0, 25, 50, 75, 100])).map(function (v) {
-    return '<span class="g-guia' + (v === 0 && min < 0 ? ' cero' : '') + '" style="bottom:' + Y(v) + '%"><em>' + num(v, 0) + '</em></span>';
-  }).join('');
-  return '<div class="g-brecha"><div class="g-br-ley"><span><i style="background:var(--t8)"></i>' + esc(o.etqBueno) + '</span><span><i style="background:var(--t0)"></i>' + esc(o.etqMalo) + '</span></div>' +
-    '<div class="g-br-area"><div class="g-br-guias">' + guias + '</div>' + grupos.map(function (g, gi) {
-    var b = g.bueno, m = g.malo, d = b && m ? b.v - m.v : null, lo = b && m ? Math.min(b.v, m.v) : null, hi = b && m ? Math.max(b.v, m.v) : null;
-    var tb = b ? '<div class="t">' + esc(g.nombre) + ' · ' + esc(o.etqBueno) + '</div>' + num(b.v) + ' ' + o.unidad + ' · n ' + num(b.n, 0) : '';
-    var tm = m ? '<div class="t">' + esc(g.nombre) + ' · ' + esc(o.etqMalo) + '</div>' + num(m.v) + ' ' + o.unidad + ' · n ' + num(m.n, 0) : '';
-    return '<div class="g-br-col">' +
-      '<div class="g-br-pista">' +
-      (d != null ? '<span class="g-br-tallo" style="bottom:' + Y(lo) + '%;height:' + (Y(hi) - Y(lo)) + '%" data-an="tallo" data-o="' + (m.v <= b.v ? 'b' : 't') + '" data-i="' + gi + '"></span>' : '') +
-      (d != null ? '<span class="g-br-chip" style="bottom:' + ((Y(lo) + Y(hi)) / 2) + '%" data-an="pop" data-i="' + (gi + 3) + '">' + cuenta(d, 1, {signo: true}) + '</span>' : '') +
-      (m ? '<span class="g-br-pt malo" style="bottom:' + Y(m.v) + '%" data-an="pop" data-i="' + gi + '" ' + tip(tm) + '><em>' + num(m.v) + '</em></span>' : '') +
-      (b ? '<span class="g-br-pt bueno" style="bottom:' + Y(b.v) + '%" data-an="pop" data-i="' + (gi + 1) + '" ' + tip(tb) + '><em>' + num(b.v) + '</em></span>' : '') +
-      '</div><div class="g-br-pie"><b>' + esc(g.nombre) + '</b><small>' + (g.sub || '') + '</small>' +
-      '<small>n ' + (b ? num(b.n, 0) : 0) + ' · ' + (m ? num(m.n, 0) : 0) + '</small></div></div>';
-  }).join('') + '</div><p class="nota g-br-nota">La cifra en medio es la brecha en ' + esc(o.unidad) + '.</p></div>';
+  var fila = function (g, r, etq, cls, i) {
+    if (!r) return '<div class="g-br-fila"><span class="et">' + esc(etq) + '</span><span class="g-br-pista"></span><span class="num">—</span></div>';
+    var w = Math.min(Math.abs(r.v), 100) / 2, lado = r.v < 0 ? 'right' : 'left';
+    return '<div class="g-br-fila" ' + tip('<div class="t">' + esc(g.nombre) + ' · ' + esc(etq) + '</div>NPS ' + num(r.v) + ' · ' + num(r.n, 0) + ' respuestas') + '>' +
+      '<span class="et"><i class="' + cls + '"></i>' + esc(etq) + '</span>' +
+      '<span class="g-br-pista"><b class="' + cls + '" style="' + lado + ':50%;width:' + w + '%" data-an="ancho" data-i="' + i + '"></b></span>' +
+      '<span class="num">' + cuenta(r.v, 1) + '<small>' + num(r.n, 0) + ' resp.</small></span></div>';
+  };
+  return '<div class="g-brecha"><div class="g-br-gs">' +
+    grupos.map(function (g, gi) {
+      var b = g.bueno, m = g.malo, d = b && m ? b.v - m.v : null;
+      return '<div class="g-br-g"><div class="g-br-tit"><b>' + esc(g.nombre) + '</b>' + (g.sub ? '<small>' + g.sub + '</small>' : '') + '</div>' +
+        fila(g, b, o.etqBueno, 'bueno', gi * 2) + fila(g, m, o.etqMalo, 'malo', gi * 2 + 1) +
+        (d != null ? '<p class="g-br-frase">«' + esc(o.etqBueno) + '» queda <b>' + num(Math.abs(d)) + ' ' + esc(o.unidad) + ' ' + (d >= 0 ? 'por encima' : 'por debajo') + '</b> de «' + esc(o.etqMalo) + '».</p>' : '') + '</div>';
+    }).join('') + '</div>' +
+    '<p class="nota g-br-nota">La raya del centro es NPS 0. El NPS va de −100 (todos lo critican) a 100 (todos lo recomiendan): verde hacia la derecha, rojo hacia la izquierda.</p></div>';
 }
 
 // ------------------------------------------------------------------ relojes: atributos con dos anillos (uno por serie)
