@@ -139,15 +139,19 @@ function cargarComentarios() {
 // Lentes: qué comentarios ilustran cada lado de cada indicador
 const LENTES = {
   det: {t: 'Detractores', malo: true, pred: v => v.grupo === 0, preg: ['Q3', 'Q13']},
+  neu: {t: 'Neutros', pred: v => v.grupo === 1, preg: ['Q13']},   // los pasivos (7–8) solo responden Q13
   pro: {t: 'Promotores', pred: v => v.grupo === 2, preg: ['Q4', 'Q13']},
-  dif: {t: 'Difícil contactar', malo: true, pred: v => v.q6 === 1 || v.q6 === 2, preg: ['Q7', 'Q3']},
-  fac: {t: 'Fácil contactar', pred: v => v.q6 >= 4, preg: ['Q4', 'Q13']},
+  dif: {t: 'Difícil contactar', c: 'Difícil', malo: true, pred: v => v.q6 === 1 || v.q6 === 2, preg: ['Q7', 'Q3']},
+  fac: {t: 'Fácil contactar', c: 'Fácil', pred: v => v.q6 >= 4, preg: ['Q4', 'Q13']},
   nof: {t: 'No funciona', malo: true, pred: v => v.q8 === 0, preg: ['Q3', 'Q13']},
   sif: {t: 'Sí funciona', pred: v => v.q8 === 1, preg: ['Q4', 'Q13']},
-  amal: {t: 'Asesor mal evaluado', malo: true, pred: v => v.q9 > 0 && v.q9 <= 2.5, preg: ['Q10', 'Q3']},
-  abien: {t: 'Asesor bien evaluado', pred: v => v.q9 >= 4.5, preg: ['Q10', 'Q4']},
+  amal: {t: 'Asesor mal evaluado', c: 'Mal evaluado', malo: true, pred: v => v.q9 > 0 && v.q9 <= 2.5, preg: ['Q10', 'Q3']},
+  abien: {t: 'Asesor bien evaluado', c: 'Bien evaluado', pred: v => v.q9 >= 4.5, preg: ['Q10', 'Q4']},
 };
 const PAR = {nps: ['det', 'pro'], ces: ['dif', 'fac'], fun: ['nof', 'sif'], ase: ['amal', 'abien']};
+// Filtros de Voces agrupados por indicador; color del lado: malo rojo, neutro arena, bueno verde
+const GRUPO_L = Object.assign({}, PAR, {nps: ['det', 'neu', 'pro']});
+const tonoL = l => LENTES[l].malo ? 'var(--t0)' : l === 'neu' ? 'var(--t4)' : 'var(--t8)';
 const GENERICO = /^(n\/?a|ninguna?|ninguno|nada|no|si|sí|ok|bien|bueno|buena|excelente|todo bien|gracias|mal[oa]?|regular|\.+|-+)\.?$/i;
 // Filtro de un comentario: tipo (lente) + filtros globales + búsqueda (q ya normalizado). Sin el filtro de genéricos ni de largo.
 const pasaCom = (v, L, q) => (!L || (L.pred(v) && L.preg.includes(v.preg))) && pasa(v.r) && (!q || (v.nt || (v.nt = norm(v.texto))).includes(q));
@@ -618,7 +622,7 @@ function vAlarmas() {
   const li = (x, i) => `<li class="al ${x.nivel}" data-an="aparece" data-i="${i}"><i class="al-p" aria-hidden="true"></i>
       <div class="al-x"><div class="al-t"><span class="al-e" style="--c:${CE[EST[x.e]]}">${EST[x.e] === 'Falla masiva' ? 'FM' : 'Soporte'}</span>${x.tit}</div><p>${x.det}</p></div>
       ${x.filtro ? `<button type="button" class="al-f" data-dim="${x.filtro.dim}" data-v="${x.filtro.v}" aria-pressed="${st[x.filtro.dim].has(x.filtro.v)}">${st[x.filtro.dim].has(x.filtro.v) ? 'Quitar filtro' : 'Filtrar'}</button>` : ''}</li>`;
-  return `<section class="panel alarmas" id="alarmas"><header><h2 ${tipAttr(reglas)}>Alarmas <span class="info">?</span></h2>
+  return `<section class="panel alarmas${al.length ? ' con' : ''}" id="alarmas"><header><h2 ${tipAttr(reglas)}>Alarmas <span class="info">?</span></h2>
       <div class="al-cont">${cnt.filter(([, n]) => n).map(([nv, n]) => `<span class="al-c ${nv}">${n} ${nomN[nv][n === 1 ? 0 : 1]}</span>`).join('')}</div>
       <p class="sub">${alcance()} · ${etqMeses(st.meses)}${ant ? ` frente a ${etqCorta(ant)}` : ' · sin un periodo anterior igual para comparar'}${enCurso ? ` · mes en curso (corte al ${D.generado.slice(8, 10)}/${D.generado.slice(5, 7)}): las cifras pueden moverse` : ''}</p></header>
     ${al.length ? `<ol class="al-lista">${vis.map(li).join('')}</ol>${al.length > tope ? `<button type="button" class="mas" id="al-mas">${alEst.todos ? 'Ver menos' : `Ver las ${al.length}`}</button>` : ''}`
@@ -786,7 +790,9 @@ function vVoz(p, o = {}) {
     <section class="panel"><header><h2>Nube de comentarios</h2><span class="nota" ${C ? tipAttr(`${f0(total)} comentarios con estos filtros. ${fuera ? `${f0(fuera)} no dicen nada concreto («ninguna», «ok», «bien»…) y no entran en la nube.` : ''} Datos personales tapados.`) : ''}>${C ? `${f0(exEst.items.length)} comentarios${fuera ? ` · ${f0(fuera)} sin contenido fuera` : ''}` : 'Cargando…'}</span>
       <p class="sub">Cada comentario cae en uno o varios temas. Elige un tema a la izquierda o una palabra para leer los comentarios que más se repiten.</p></header>
       <div class="ex-herr"><input type="search" id="ex-q" placeholder="Buscar: visita, técnico, whatsapp, factura…" value="${esc(exEst.q)}" aria-label="Buscar en comentarios">
-        <div class="seg" role="group" aria-label="Tipo"><button type="button" data-l="" aria-pressed="${!exEst.lente}">Todos</button>${Object.entries(LENTES).map(([k, l]) => `<button type="button" data-l="${k}" aria-pressed="${exEst.lente === k}">${l.t}</button>`).join('')}</div></div>
+        <div class="lentes" role="group" aria-label="Tipo de comentario"><button type="button" class="l-todos" data-l="" aria-pressed="${!exEst.lente}">Todos</button>${Object.entries(GRUPO_L).map(([k, ls]) => {
+          const sel = ls.includes(exEst.lente);
+          return `<fieldset class="l-grupo${sel ? ' activo' : ''}"${sel ? ` style="--gc:${tonoL(exEst.lente)}"` : ''}><legend>${IND[k].corto}</legend>${ls.map(l => `<button type="button" data-l="${l}" class="${l === 'neu' ? 'neutro' : ''}" style="--lc:${tonoL(l)}" aria-pressed="${exEst.lente === l}" aria-label="${IND[k].corto}: ${LENTES[l].t}"><i></i>${LENTES[l].c || LENTES[l].t}</button>`).join('')}</fieldset>`; }).join('')}</div></div>
       <div id="ex-nube">${C ? '' : '<div class="nb-esq"><div class="esqueleto"></div><div class="esqueleto"></div></div>'}</div></section>`;
   if (C) { const ph = p.querySelector('#ex-nube'); ph.appendChild(nubeEl); montarNube(o.quieto); }
   const q = p.querySelector('#ex-q'); let t;

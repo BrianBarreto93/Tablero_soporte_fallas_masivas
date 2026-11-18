@@ -471,6 +471,44 @@ dl.defs dt{font-weight:800}dl.defs dd{margin:0;color:var(--ink-2)}
   /* Pestaña de comentarios de la nube: encima de la barra de secciones fija de abajo, no detrás */
   .nb .nb-pop{bottom:calc(76px + env(safe-area-inset-bottom));max-height:min(72vh,calc(100vh - 190px))}
 }
+/* Alarmas: halo violeta que respira (color que no usa ningún otro elemento) para encontrarlas de un vistazo */
+:root[data-theme="light"]{--halo:#7C3AED}
+:root[data-theme="dark"]{--halo:#A78BFA}
+.alarmas.con{border-color:color-mix(in srgb,var(--halo) 55%,transparent);animation:al-halo 3.2s ease-in-out infinite}
+.alarmas.con h2{color:var(--halo)}
+@keyframes al-halo{
+  0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--halo) 12%,transparent),0 0 16px color-mix(in srgb,var(--halo) 16%,transparent)}
+  50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--halo) 20%,transparent),0 0 36px color-mix(in srgb,var(--halo) 34%,transparent)}}
+/* Voces: un círculo por indicador; el que tiene la selección se enciende con su color y respira */
+.lentes{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.l-todos{height:36px;padding:0 18px;border-radius:999px;border:1.5px solid var(--line-2);background:var(--panel);color:var(--ink-2);font:800 12px var(--f-ui);transition:background .25s,color .25s,border-color .25s}
+.l-todos:hover{color:var(--ink);border-color:var(--ink-3)}
+.l-todos[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);animation:l-sel .45s cubic-bezier(.34,1.56,.64,1)}
+.l-grupo{--gc:var(--line-2);margin:0;min-width:0;display:flex;gap:2px;padding:0 4px 4px;border:1.5px solid var(--line-2);border-radius:20px;background:var(--panel);transition:border-color .3s,background .3s}
+.l-grupo legend{margin-left:16px;padding:0 6px;font:900 10px/1 var(--f-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);transition:color .3s}
+.l-grupo button{height:28px;padding:0 12px;border:0;border-radius:999px;background:none;color:var(--ink-2);font:700 12px var(--f-ui);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .25s,color .25s}
+.l-grupo button i{width:7px;height:7px;border-radius:50%;background:var(--lc);transition:background .25s}
+.l-grupo button:hover{background:var(--panel-2);color:var(--ink)}
+.l-grupo button[aria-pressed="true"]{background:var(--lc);color:#fff;box-shadow:0 2px 10px color-mix(in srgb,var(--lc) 45%,transparent);animation:l-sel .45s cubic-bezier(.34,1.56,.64,1)}
+.l-grupo button.neutro[aria-pressed="true"]{color:#2b2112}
+.l-grupo button[aria-pressed="true"] i{background:currentColor}
+.l-grupo.activo{border-color:var(--gc);background:color-mix(in srgb,var(--gc) 7%,var(--panel));animation:l-respira 2.8s ease-in-out infinite}
+.l-grupo.activo legend{color:var(--gc)}
+@keyframes l-sel{from{transform:scale(.8)}to{transform:scale(1)}}
+@keyframes l-respira{
+  0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--gc) 0%,transparent)}
+  50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--gc) 16%,transparent),0 0 20px color-mix(in srgb,var(--gc) 28%,transparent)}}
+/* Tableau (lienzo por defecto 1000 × 800): los 4 KPI en una fila y alarmas junto a la serie, para que quepan en la primera pantalla.
+   Letra igual que en pantalla ancha (achicarla ya se probó y se veía muy pequeño). */
+@media (min-width:900px) and (max-width:1300px){
+  .kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .kpi{padding:12px 12px 10px}
+  .kpi .et{letter-spacing:.04em}
+  #p-resumen>.g-2-1{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .dl>button{width:30px;padding:0;justify-content:center}.dl>button .tx{display:none}
+  .top{padding:12px 16px;gap:8px 6px}.stage{padding:16px 16px 24px}
+  .top .pill-f>button{padding:0 8px}.top .seg button{padding:0 10px}
+}
 </style>
 </head>
 <body>
