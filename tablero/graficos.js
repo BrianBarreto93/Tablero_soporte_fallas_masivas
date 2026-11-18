@@ -1,5 +1,5 @@
 /* graficos.js · gráficos animados compartidos (tableros Factura, pago y cobro / Soporte y Fallas masivas).
-   El MISMO archivo va en los dos tableros: si se cambia uno, copiarlo al otro.
+   El MISMO archivo va en los tres tableros (Factura, Soporte-FM y Digital): si se cambia uno, copiarlo a los otros.
 
    Idea: cada constructor devuelve HTML/SVG ya en su estado FINAL (así se ve bien sin animación, en Tableau, al imprimir
    y con «reducir movimiento»). GRAF.animar(raiz) pone el estado inicial antes del primer cuadro y, cuando el panel entra
@@ -78,7 +78,33 @@ function anillo(v, min, max, o) {
     (o.centro ? '<text x="' + c + '" y="' + (c + 4) + '" text-anchor="middle" class="g-anillo-t">' + o.centro + '</text>' : '') + '</svg>';
 }
 
-// Spark de área: series = [{color, pts:[{i, v}]}], n = total de posiciones, marcas = posiciones resaltadas
+// Curva suave que pasa por todos los puntos sin pasarse de ellos (cúbica monótona, Fritsch–Carlson): no inventa picos
+// ni valles entre un mes y otro. p = [[x, y], …] ya en píxeles.
+function curva(p) {
+  var n = p.length, f = function (v) { return v.toFixed(1); };
+  if (!n) return '';
+  var d = 'M' + f(p[0][0]) + ' ' + f(p[0][1]);
+  if (n === 1) return d;
+  if (n === 2) return d + ' L' + f(p[1][0]) + ' ' + f(p[1][1]);
+  var dx = [], m = [], t = [], i;
+  for (i = 0; i < n - 1; i++) { dx[i] = p[i + 1][0] - p[i][0] || 1e-6; m[i] = (p[i + 1][1] - p[i][1]) / dx[i]; }
+  t[0] = m[0]; t[n - 1] = m[n - 2];
+  for (i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  for (i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    var a = t[i] / m[i], b = t[i + 1] / m[i], h = a * a + b * b;
+    if (h > 9) { var k = 3 / Math.sqrt(h); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  for (i = 0; i < n - 1; i++) {
+    var c = dx[i] / 3;
+    d += ' C' + f(p[i][0] + c) + ' ' + f(p[i][1] + t[i] * c) + ' ' + f(p[i + 1][0] - c) + ' ' + f(p[i + 1][1] - t[i + 1] * c) + ' ' + f(p[i + 1][0]) + ' ' + f(p[i + 1][1]);
+  }
+  return d;
+}
+
+// Spark de área: series = [{color, pts:[{i, v}]}], n = total de posiciones, marcas = posiciones resaltadas.
+// Curva suave, área en degradado y un punto que late al final de cada serie (HTML encima del SVG estirado, para que
+// el punto no se deforme).
 var nId = 0;
 function spark(series, n, marcas, o) {
   o = o || {};
@@ -86,23 +112,26 @@ function spark(series, n, marcas, o) {
   series.forEach(function (s) { s.pts.forEach(function (p) { all.push(p.v); }); });
   if (!all.length) return '';
   var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), rg = hi - lo || 1;
-  var X = function (i) { return 3 + (W - 6) * i / Math.max(1, n - 1); }, Y = function (v) { return 4 + (H - 8) * (1 - (v - lo) / rg); };
+  var X = function (i) { return 4 + (W - 8) * i / Math.max(1, n - 1); }, Y = function (v) { return 5 + (H - 10) * (1 - (v - lo) / rg); };
   var s = '<svg class="spark g-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><defs>';
-  var ids = series.map(function (sr) { var id = 'gsa' + (++nId); s += gradArea(id, sr.color); return id; });
+  var ids = series.map(function (sr) { var id = 'gsa' + (++nId); s += gradArea(id, sr.color, .3); return id; });
   s += '</defs>';
   (marcas || []).forEach(function (m) { s += '<line x1="' + X(m) + '" x2="' + X(m) + '" y1="0" y2="' + H + '" class="g-marca" vector-effect="non-scaling-stroke"/>'; });
+  var pts = '';
   series.forEach(function (sr, k) {
     if (sr.pts.length < 2) return;
     // tramos: la línea se corta donde faltan periodos (no se dibuja un tramo inventado)
     var tr = [];
     sr.pts.forEach(function (p, j) { if (!j || p.i - sr.pts[j - 1].i > 1) tr.push([]); tr[tr.length - 1].push(p); });
-    var linea = function (t) { return t.map(function (p, j) { return (j ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1); }).join(' '); };
+    var linea = function (t) { return curva(t.map(function (p) { return [X(p.i), Y(p.v)]; })); };
     var d = tr.map(linea).join(' ');
     var a = tr.filter(function (t) { return t.length > 1; }).map(function (t) { return linea(t) + ' L' + X(t[t.length - 1].i).toFixed(1) + ' ' + H + ' L' + X(t[0].i).toFixed(1) + ' ' + H + ' Z'; }).join(' ');
     if (a) s += '<path d="' + a + '" style="fill:url(#' + ids[k] + ')" data-an="aparece" data-i="' + (k + 2) + '"/>';
-    s += '<path d="' + d + '" pathLength="1" style="fill:none;stroke:' + sr.color + ';stroke-width:2;stroke-linejoin:round;stroke-linecap:round" vector-effect="non-scaling-stroke" data-an="traza" data-i="' + k + '"/>';
+    s += '<path d="' + d + '" pathLength="1" style="fill:none;stroke:' + sr.color + ';stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round" vector-effect="non-scaling-stroke" data-an="traza" data-i="' + k + '"/>';
+    var u = sr.pts[sr.pts.length - 1];
+    pts += '<i class="g-spark-pt" style="left:' + (X(u.i) / W * 100).toFixed(2) + '%;top:' + (Y(u.v) / H * 100).toFixed(2) + '%;--c:' + sr.color + '" data-an="pop" data-i="' + (k + 14) + '"></i>';
   });
-  return s + '</svg>';
+  return '<div class="g-spark-w">' + s + '</svg>' + pts + '</div>';
 }
 
 // Riel con la rampa de fondo (para pesas): devuelve el estilo inline del riel
@@ -304,6 +333,152 @@ function guia(raiz) {
   });
 }
 
+// ------------------------------------------------------------------ líneas con movimiento
+// GRAF.lineas(el, o) dibuja dentro de el (con su tamaño real) una o varias series con curva suave, área en degradado,
+// resplandor del color de la serie, etiqueta final en píldora y guía al pasar el cursor. Al entrar en pantalla la línea
+// se traza de izquierda a derecha con un cometa que la va dibujando; cada punto aparece cuando la línea llega a él y la
+// cifra final cuenta hasta su valor. Redibujar con los mismos datos (cambio de tamaño, tema) no repite la animación.
+// o = {series:[{nombre, color, tinta?, total?, pts:[{x, v, n}]}], xs:[x ordenados], etq: x → texto del eje,
+//      marcas:[x resaltados], min, max (escala del indicador), nmin, fmt: v → texto, tip: x → html, id, der: margen derecho}
+var EASE_L = [.65, 0, .35, 1];
+// Momento (0–1) en que una curva cubic-bezier(x1,0,x2,1) llega a la fracción f del recorrido
+function cuandoLlega(f) {
+  var bx = function (s) { return 3 * EASE_L[0] * s * (1 - s) * (1 - s) + 3 * EASE_L[2] * s * s * (1 - s) + s * s * s; };
+  var by = function (s) { return 3 * s * s * (1 - s) + s * s * s; };
+  var a = 0, b = 1;
+  for (var i = 0; i < 24; i++) { var mm = (a + b) / 2; if (by(mm) < f) a = mm; else b = mm; }
+  return bx((a + b) / 2);
+}
+function anchoTxt(t) { return String(t).length * 7 + 16; }
+function lineas(el, o) {
+  var W = el.clientWidth, H = el.clientHeight;
+  if (!W || !H) return;
+  var S = o.series.filter(function (s) { return s.pts.length; }), xs = o.xs;
+  var L = 40, R = o.der || 74, T = 16, B = 28, yB = H - B;
+  var vals = []; S.forEach(function (s) { s.pts.forEach(function (p) { vals.push(p.v); }); });
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max(4, (hi - lo) * .15);
+  lo = Math.max(o.min, Math.floor((lo - pad) / 10) * 10); hi = Math.min(o.max, Math.ceil((hi + pad) / 10) * 10);
+  if (hi === lo) hi = lo + 10;
+  var X = function (i) { return xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1); };
+  var Y = function (v) { return T + (yB - T) * (1 - (v - lo) / (hi - lo)); };
+  var paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 56))));
+  var id = 'ln-' + (o.id || ++nId), marcas = o.marcas || [];
+  var s = '<svg class="ln" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true" data-guia><defs>' + gradY(id + '-y', lo, hi, o.min, o.max) +
+    '<filter id="' + id + '-glow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="4.5"/></filter>';
+  S.forEach(function (sr, j) {
+    s += '<linearGradient id="' + id + '-a' + j + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:' + sr.color + ';stop-opacity:' + (sr.total ? .1 : .3) + '"/>' +
+      '<stop offset=".55" style="stop-color:' + sr.color + ';stop-opacity:' + (sr.total ? .03 : .09) + '"/><stop offset="1" style="stop-color:' + sr.color + ';stop-opacity:0"/></linearGradient>';
+  });
+  s += '</defs><g class="ln-fondo">';
+  // Meses elegidos: columna suave y su etiqueta en píldora
+  marcas.forEach(function (m) { var i = xs.indexOf(m); if (i >= 0) s += '<rect class="ln-col" x="' + (X(i) - 19).toFixed(1) + '" y="' + (T - 8) + '" width="38" height="' + (yB - T + 14) + '" rx="19"/>'; });
+  for (var v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += '<line class="ln-grid" x1="' + L + '" x2="' + (W - R + 8) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/><text class="ln-ey" x="' + (L - 12) + '" y="' + (Y(v) + 4).toFixed(1) + '" text-anchor="end">' + num(v, 0) + '</text>';
+  s += '<rect class="g-rampa-y" x="' + (L - 6) + '" y="' + Y(hi).toFixed(1) + '" width="3.5" height="' + (Y(lo) - Y(hi)).toFixed(1) + '" rx="1.75" style="fill:url(#' + id + '-y)"/>';
+  if (lo < 0 && hi > 0) s += '<line class="ln-cero" x1="' + L + '" x2="' + (W - R + 8) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '"/>';
+  xs.forEach(function (x, i) {
+    if (!(i % cada === 0 || i === xs.length - 1)) return;
+    var t = esc(o.etq(x)), sel = marcas.indexOf(x) >= 0;
+    if (sel) { var w = anchoTxt(t) - 4; s += '<rect class="ln-pil" x="' + (X(i) - w / 2).toFixed(1) + '" y="' + (H - 21) + '" width="' + w + '" height="18" rx="9"/>'; }
+    s += '<text class="ln-ex' + (sel ? ' sel' : '') + '" x="' + X(i).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + t + '</text>';
+  });
+  s += '</g><line class="g-guia-l" x1="0" x2="0" y1="' + (T - 6) + '" y2="' + yB + '"/>';
+  // Posiciones por serie, partidas en tramos donde falta un periodo (no se inventa el tramo)
+  var P = S.map(function (sr) {
+    var pos = sr.pts.map(function (p) { return {x: X(xs.indexOf(p.x)), y: Y(p.v), i: xs.indexOf(p.x), p: p}; });
+    var tr = []; pos.forEach(function (q, j) { if (!j || q.i - pos[j - 1].i > 1) tr.push([]); tr[tr.length - 1].push(q); });
+    var d = tr.map(function (t) { return curva(t.map(function (q) { return [q.x, q.y]; })); }).join(' ');
+    // fracción del recorrido hasta cada punto (por cuerdas; basta para sincronizar)
+    var acc = [0], tot = 0; for (var j = 1; j < pos.length; j++) { tot += Math.sqrt(Math.pow(pos[j].x - pos[j - 1].x, 2) + Math.pow(pos[j].y - pos[j - 1].y, 2)); acc.push(tot); }
+    return {sr: sr, pos: pos, tr: tr, d: d, frac: acc.map(function (a) { return tot ? a / tot : 0; })};
+  });
+  P.forEach(function (q, j) {
+    if (q.sr.total) return;   // la serie total va sin área: taparía las de los estudios
+    q.tr.filter(function (t) { return t.length > 1; }).forEach(function (t) {
+      s += '<path class="ln-area" d="' + curva(t.map(function (z) { return [z.x, z.y]; })) + ' L' + t[t.length - 1].x.toFixed(1) + ' ' + yB + ' L' + t[0].x.toFixed(1) + ' ' + yB + ' Z" style="fill:url(#' + id + '-a' + j + ')" data-s="' + j + '"/>';
+    });
+  });
+  P.forEach(function (q, j) {
+    var w = q.sr.total ? 3.2 : 2.6;
+    s += '<path class="ln-brillo" d="' + q.d + '" pathLength="1" style="stroke:' + q.sr.color + ';stroke-width:' + (w + 4) + '" filter="url(#' + id + '-glow)" data-s="' + j + '"/>';
+    s += '<path class="ln-linea" d="' + q.d + '" pathLength="1" style="stroke:' + q.sr.color + ';stroke-width:' + w + '" data-s="' + j + '"/>';
+  });
+  P.forEach(function (q, j) {
+    var u = q.pos[q.pos.length - 1];
+    s += '<circle class="ln-halo" cx="' + u.x.toFixed(1) + '" cy="' + u.y.toFixed(1) + '" r="6" style="stroke:' + q.sr.color + '" data-s="' + j + '"/>';
+    s += q.pos.map(function (z, k) {
+      var hueco = o.nmin && z.p.n < o.nmin;
+      return '<circle class="g-pt ln-pt" data-x="' + z.p.x + '" data-s="' + j + '" data-f="' + q.frac[k].toFixed(3) + '" cx="' + z.x.toFixed(1) + '" cy="' + z.y.toFixed(1) + '" r="' + (k === q.pos.length - 1 ? 5 : 4) + '" style="fill:' + (hueco ? 'var(--panel)' : q.sr.color) + ';stroke:' + (hueco ? q.sr.color : 'var(--panel)') + '"/>';
+    }).join('');
+    s += '<circle class="ln-cometa" r="5" cx="' + q.pos[0].x.toFixed(1) + '" cy="' + q.pos[0].y.toFixed(1) + '" style="fill:' + q.sr.color + '" data-s="' + j + '"/>';
+  });
+  // Cifra final en píldora del color de la serie; si dos quedan muy cerca se separan en vertical
+  var fin = P.map(function (q, j) { var u = q.pos[q.pos.length - 1]; return {j: j, x: u.x + 12, y: u.y, v: u.p.v, ini: q.pos.length > 1 ? q.pos[q.pos.length - 2].p.v : u.p.v, sr: q.sr}; });
+  fin.sort(function (a, b) { return a.y - b.y; });
+  for (var i = 1; i < fin.length; i++) if (fin[i].y - fin[i - 1].y < 22) fin[i].y = fin[i - 1].y + 22;
+  fin.forEach(function (f) {
+    var t = o.fmt(f.v), w = anchoTxt(t);
+    s += '<g class="ln-et" data-s="' + f.j + '" transform="translate(' + f.x.toFixed(1) + ' ' + f.y.toFixed(1) + ')"><rect x="0" y="-10.5" width="' + w + '" height="21" rx="10.5" style="fill:' + f.sr.color + '"/>' +
+      '<text x="' + (w / 2) + '" y="4.5" text-anchor="middle" style="fill:' + (f.sr.tinta || '#fff') + '" data-v="' + f.v + '" data-ini="' + f.ini + '">' + esc(t) + '</text></g>';
+  });
+  xs.forEach(function (x, i) {
+    var x0 = i ? (X(i - 1) + X(i)) / 2 : L, x1 = i < xs.length - 1 ? (X(i) + X(i + 1)) / 2 : W - R;
+    s += '<rect class="hit" data-x="' + x + '" data-cx="' + X(i).toFixed(1) + '" x="' + x0.toFixed(1) + '" y="' + T + '" width="' + (x1 - x0).toFixed(1) + '" height="' + (yB - T) + '" ' + tip(o.tip ? o.tip(x) : '') + '/>';
+  });
+  // Firma de los datos: si no cambió (solo el tamaño o el tema) se redibuja quieto
+  var firma = JSON.stringify([S.map(function (sr) { return [sr.nombre, sr.pts.map(function (p) { return [p.x, p.v]; })]; }), marcas]);
+  var nueva = el._lnFirma !== firma;
+  el._lnFirma = firma;
+  el.innerHTML = s + '</svg>';
+  guia(el);
+  if (nueva && activo()) animarLineas(el, o);
+}
+function animarLineas(el, o) {
+  var svg = el.querySelector('svg'), D = 1500, PAUSA = 120;
+  svg.classList.add('ln-espera');
+  var ir = function () {
+    if (!svg.isConnected) return;
+    svg.classList.remove('ln-espera'); svg.classList.add('ln-anima');
+    var ez = 'cubic-bezier(' + EASE_L.join(',') + ')';
+    svg.querySelectorAll('.ln-fondo').forEach(function (g) { g.animate([{opacity: 0}, {opacity: 1}], {duration: 500, easing: 'ease-out', fill: 'backwards'}); });
+    svg.querySelectorAll('.ln-area').forEach(function (a) {
+      var del = +a.getAttribute('data-s') * PAUSA;
+      a.animate([{clipPath: 'inset(0 100% 0 0)', opacity: 0}, {clipPath: 'inset(0 0% 0 0)', opacity: 1}], {duration: D, delay: del + 80, easing: ez, fill: 'backwards'});
+    });
+    svg.querySelectorAll('.ln-linea, .ln-brillo').forEach(function (l) {
+      var del = +l.getAttribute('data-s') * PAUSA;
+      l.style.strokeDasharray = '1 1';
+      var an = l.animate([{strokeDashoffset: 1}, {strokeDashoffset: 0}], {duration: D, delay: del, easing: ez, fill: 'both'});
+      an.onfinish = function () { l.style.strokeDasharray = ''; try { an.cancel(); } catch (e) { /* nada */ } };
+    });
+    svg.querySelectorAll('.ln-pt').forEach(function (p) {
+      var del = +p.getAttribute('data-s') * PAUSA + D * cuandoLlega(+p.getAttribute('data-f'));
+      p.style.transformBox = 'fill-box'; p.style.transformOrigin = 'center';
+      p.animate([{opacity: 0, transform: 'scale(0)'}, {opacity: 1, transform: 'scale(1.7)', offset: .55}, {opacity: 1, transform: 'scale(1)'}], {duration: 520, delay: del - 60, easing: 'ease-out', fill: 'backwards'});
+    });
+    // Cometa: sigue la curva real con getPointAtLength, al mismo ritmo que el trazo
+    svg.querySelectorAll('.ln-cometa').forEach(function (c) {
+      var j = c.getAttribute('data-s'), l = svg.querySelector('.ln-linea[data-s="' + j + '"]'), del = +j * PAUSA;
+      if (!l || !M) return;
+      var largo = l.getTotalLength();
+      c.style.opacity = '1';
+      M.animate(0, 1, {duration: D / 1000, delay: del / 1000, ease: EASE_L, onUpdate: function (f) { var q = l.getPointAtLength(f * largo); c.setAttribute('cx', q.x); c.setAttribute('cy', q.y); },
+        onComplete: function () { c.animate([{opacity: 1, transform: 'scale(1)'}, {opacity: 0, transform: 'scale(2.6)'}], {duration: 450, easing: 'ease-out', fill: 'forwards'}); }});
+      c.style.transformBox = 'fill-box'; c.style.transformOrigin = 'center';
+    });
+    svg.querySelectorAll('.ln-et').forEach(function (g) {
+      var del = +g.getAttribute('data-s') * PAUSA + D * .82, t = g.querySelector('text');
+      g.querySelector('rect').animate([{opacity: 0, transform: 'translateX(-10px) scale(.6)'}, {opacity: 1, transform: 'none'}], {duration: 520, delay: del, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'backwards'});
+      t.animate([{opacity: 0}, {opacity: 1}], {duration: 300, delay: del + 120, fill: 'backwards'});
+      var fin = +t.getAttribute('data-v'), ini = +t.getAttribute('data-ini'), txt = t.textContent;
+      if (M && isFinite(fin) && isFinite(ini) && ini !== fin) {
+        M.animate(ini, fin, {duration: .9, delay: (del + 120) / 1000, ease: [.22, 1, .36, 1], onUpdate: function (v) { t.textContent = o.fmt(v); }, onComplete: function () { t.textContent = txt; }});
+      }
+    });
+    setTimeout(function () { if (svg.isConnected) svg.classList.add('ln-late'); }, D + 600);
+  };
+  if (M && M.inView) M.inView(el, function () { ir(); }, {amount: .3}); else ir();
+}
+
 // ------------------------------------------------------------------ animación
 // data-an: barra (scaleX, data-o l|r|c) · ancho (width desde 0) · alto (height desde 0) · tallo (scaleY, data-o b|t)
 //          arco (stroke-dasharray desde 0, data-da final) · traza (pathLength=1) · pop · aparece · celdas · cuenta · desliza (left, data-desde)
@@ -377,6 +552,7 @@ function terminarTodo() {
   pendientes.forEach(function (p) { p.lista.forEach(terminar); if (p.parar) p.parar(); });
   vivos.forEach(function (v) { v.ctrls.forEach(function (c) { try { c.complete(); } catch (e) { /* ya terminó */ } }); v.lista.forEach(terminar); });
   pendientes = []; vivos = [];
+  [].forEach.call(document.querySelectorAll('svg.ln-espera'), function (g) { g.classList.remove('ln-espera'); g.classList.add('ln-late'); });
 }
 window.addEventListener('beforeprint', terminarTodo);
 var activo = function () { return !!M && !reducir && !document.documentElement.hasAttribute('data-sin-anim'); };
@@ -416,7 +592,7 @@ function animar(raiz, o) {
 window.GRAF = {
   activo: activo, animar: animar, guia: guia, terminarTodo: terminarTodo,
   tono: tono, tonoV: tonoV, tonoDif: tonoDif, tinta: tinta, tonosEscala: tonosEscala, gradY: gradY, gradArea: gradArea, rampaCss: rampaCss,
-  cuenta: cuenta, anillo: anillo, spark: spark, leyenda: leyenda,
+  cuenta: cuenta, anillo: anillo, spark: spark, leyenda: leyenda, lineas: lineas, curva: curva,
   divergente: divergente, waffle: waffle, donas: donas, torres: torres, paletas: paletas, radial: radial, brecha: brecha, relojes: relojes,
   num: num, config: function (c) { if (c && c.tip) tipFn = c.tip; },
 };

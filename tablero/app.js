@@ -122,13 +122,14 @@ function serie(k, modo, e) {
 }
 
 // ------------------------------------------------------------------ comentarios (carga diferida)
-let C = null;
+let C = null, DLC = [];   // DLC = dolores de la máscara «dl» de cada comentario (bit i = DLC[i])
 function cargarComentarios() {
   if (C || document.getElementById('js-com')) return;
   const s = document.createElement('script'); s.src = 'comentarios.js'; s.id = 'js-com';
   s.onload = () => {
     const cm = window.COMENTARIOS, ix = Object.fromEntries(cm.campos.map((c, i) => [c, i]));
-    C = cm.filas.map(f => ({r: f, grupo: f[ix.grupo], q8: f[ix.q8], q6: f[ix.q6], q2: f[ix.q2], q9: f[ix.q9], preg: D.cod_preguntas[f[ix.pregunta]], texto: f[ix.texto]}));
+    C = cm.filas.map(f => ({r: f, grupo: f[ix.grupo], q8: f[ix.q8], q6: f[ix.q6], q2: f[ix.q2], q9: f[ix.q9], preg: D.cod_preguntas[f[ix.pregunta]], texto: f[ix.texto], dl: ix.dl == null ? 0 : f[ix.dl] || 0}));
+    DLC = cm.dl_claves || [];
     delete window.COMENTARIOS;
     conComentarios(); if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
     setTimeout(calentarNube, 400);
@@ -309,38 +310,10 @@ function dibujarLineas(raiz) {
     const tabla = raiz.querySelector(`[data-tabla="${el.id}"]`);
     if (!xs.length) { el.innerHTML = '<p class="vacio">Sin datos con estos filtros</p>'; return; }
     const etq = x => S.flatMap(s => s.pts).find(p => p.x === x).et;
-    const L = 38, R = 52, T = 14, B = 24, vals = S.flatMap(s => s.pts.map(p => p.r.v));
-    let lo = Math.min(...vals), hi = Math.max(...vals); const pad = Math.max(4, (hi - lo) * .15);
-    lo = Math.max(IND[k].min, Math.floor((lo - pad) / 10) * 10); hi = Math.min(IND[k].max, Math.ceil((hi + pad) / 10) * 10);
-    const X = i => xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
-    const paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 52))));
-    const id = 'gl-' + el.id, base = H - B, quieto = document.documentElement.hasAttribute('data-sin-anim');
-    // Puntos, áreas y etiqueta entran con animaciones CSS (l-pop / l-ap): Motion escribe opacity y transform como
-    // atributos en SVG y el estado inicial en línea de GRAF.animar los dejaría ocultos (ver nota de la librería)
-    // Degradados: franja del eje Y con la rampa (qué tan buena es cada altura) y área bajo cada serie
-    let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" data-guia${quieto ? ' class="quieto"' : ''}><defs>${G.gradY(id + '-y', lo, hi, IND[k].min, IND[k].max)}${S.map((sr, i) => G.gradArea(`${id}-a${i}`, CE[sr.e])).join('')}</defs>`;
-    if (modo === 'mes') st.meses.filter(m => xs.includes(m)).forEach(m => { s += `<rect x="${X(xs.indexOf(m)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`; });
-    for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 10}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
-    s += `<rect class="g-rampa-y" x="${L - 5}" y="${Y(hi)}" width="3.5" height="${Y(lo) - Y(hi)}" rx="1.75" fill="url(#${id}-y)"/>`;
-    if (lo < 0 && hi > 0) s += `<line class="eje" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
-    xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && st.meses.includes(x) ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
-    s += `<line class="g-guia-l" x1="0" x2="0" y1="${T - 6}" y2="${base}"/>`;
-    S.forEach(({e, pts}, si) => {
-      const c = CE[e], pos = pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p]);
-      const d = pos.map((q, j) => (j ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
-      if (pos.length > 1) s += `<path d="${d} L${pos[pos.length - 1][0].toFixed(1)} ${base} L${pos[0][0].toFixed(1)} ${base} Z" class="l-ap" style="fill:url(#${id}-a${si});animation-delay:${.55 + si * .1}s"/>`;
-      s += `<path d="${d}" pathLength="1" fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" data-an="traza" data-i="${si * 2}"/>`;
-      // Cada punto aparece cuando la línea llega a él (la traza dura ~1,2 s)
-      s += pos.map(([x, y, p], j) => `<circle class="g-pt l-pop" data-x="${p.x}" cx="${x}" cy="${y}" r="3.6" fill="${p.r.n < NMIN ? 'var(--panel)' : c}" stroke="${p.r.n < NMIN ? c : 'var(--panel)'}" stroke-width="2" style="animation-delay:${(.15 + si * .1 + 1.1 * j / Math.max(1, pos.length - 1)).toFixed(2)}s"/>`).join('');
-      const u = pos[pos.length - 1]; s += `<text class="val l-ap" x="${u[0] + 8}" y="${u[1] + 4}" style="animation-delay:${1.3 + si * .1}s">${fmt(k, u[2].r)}</text>`;
-    });
-    xs.forEach((x, i) => {
-      const x0 = i ? (X(i - 1) + X(i)) / 2 : L, x1 = i < xs.length - 1 ? (X(i) + X(i + 1)) / 2 : W - R;
-      const t = S.map(({e, pts}) => { const p = pts.find(p => p.x === x); return p ? `<i style="background:${CE[e]}"></i>${e}: <b>${fmt(k, p.r)}</b> · n ${f0(p.r.n)}${p.r.n < NMIN ? ' (muestra baja)' : ''}` : ''; }).filter(Boolean).join('<br>');
-      s += `<rect class="hit" data-x="${x}" data-cx="${X(i)}" x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" ${tipAttr(`<div class="t">${esc(etq(x))}</div>${t}`)}/>`;
-    });
-    el.innerHTML = s + '</svg>';
-    G.guia(el);
+    // Curvas con movimiento de graficos.js (G.lineas): trazo con cometa, puntos que aparecen al paso y cifra final en píldora
+    G.lineas(el, {id: el.id, xs, etq, marcas: modo === 'mes' ? st.meses : [], min: IND[k].min, max: IND[k].max, nmin: NMIN,
+      fmt: v => fmt(k, {v}), series: S.map(sr => ({nombre: sr.e, color: CE[sr.e], pts: sr.pts.map(p => ({x: p.x, v: p.r.v, n: p.r.n}))})),
+      tip: x => `<div class="t">${esc(etq(x))}</div>` + S.map(({e, pts}) => { const p = pts.find(p => p.x === x); return p ? `<i style="background:${CE[e]}"></i>${e}: <b>${fmt(k, p.r)}</b> · n ${f0(p.r.n)}${p.r.n < NMIN ? ' (muestra baja)' : ''}` : ''; }).filter(Boolean).join('<br>')});
     if (tabla) tabla.innerHTML = `<table class="rk"><thead><tr><th>${modo === 'mes' ? 'Mes' : 'Semana'}</th>${S.map(s => `<th class="num">${s.e}</th><th class="num">n</th>`).join('')}</tr></thead><tbody>${xs.map(x => `<tr><td>${esc(etq(x))}</td>${S.map(s => { const p = s.pts.find(p => p.x === x); return `<td class="num">${p ? fmt(k, p.r) : '—'}</td><td class="num">${p ? f0(p.r.n) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`;
   });
 }
@@ -412,7 +385,7 @@ const DOLOR = {
   recurrente: ['La falla vuelve a los pocos días', 'Funcionó un día y hoy otra vez no tengo internet.'],
   cobro: ['Pago completo por días sin servicio', 'Fueron 3 días sin teléfono, internet ni televisión, y la factura llega igual.'],
 };
-const dolEst = {rango: 'mes'};
+const dolEst = {rango: 'mes', sel: null, voz: null};   // sel = dolor resaltado; voz = dolor con sus comentarios abiertos
 function filasDolor() {
   if (dolEst.rango === 'mes') return filas();
   const anio = PERIODOS[st.periodo].slice(0, 4);   // año corrido hasta el último mes elegido
@@ -457,7 +430,7 @@ function vDolores() {
       <div class="dh-pista" ${tipAttr(`<div class="t">Techo teórico</div>Las ${f0(alguno.nSin)} encuestas que no mencionan ningún dolor dan un NPS de ${techo == null ? '—' : f1(techo)}. Si todos calificaran así, el NPS subiría ${techo == null ? '—' : f1(techo - tot.nps)} pts.`)}>
         <div class="riel"><span class="cero" style="left:50%"></span>
           ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.nps, techo))}%;width:${Math.abs(X(techo) - X(tot.nps))}%" data-an="ancho" data-i="2"></span><span class="pt fin" style="left:${X(techo)}%" data-an="desliza" data-desde="${X(tot.nps)}%" data-i="2"></span>`}
-          <span class="pt hoy" style="left:${X(tot.nps)}%"></span></div>
+          <span class="pt hoy" style="left:${X(tot.nps)}%"></span>${marcaElegido(orden, X)}</div>
         <div class="escala"><span>−100</span><span>0</span><span>100</span></div></div>
       <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : G.cuenta(techo, 1, {desde: tot.nps})}</b></div>
       <div class="dh-pts"><b>${techo == null ? '—' : G.cuenta(techo - tot.nps, 1, {signo: true})}</b><span>pts de NPS en juego</span></div>
@@ -468,23 +441,118 @@ function vDolores() {
     const tipN = `<div class="t">${esc(tit)}</div>NPS con el dolor: <b>${f1(x.con)}</b> (n ${f0(x.n)})<br>NPS sin el dolor: <b>${f1(x.sin)}</b> (n ${f0(x.nSin)})<br>Brecha: ${f1(br)} pts`;
     const tipC = `<div class="t">CES · ${esc(tit)}</div>Con el dolor: <b>${x.cesCon == null ? '—' : f1(x.cesCon) + ' %'}</b><br>Sin el dolor: <b>${x.cesSin == null ? '—' : f1(x.cesSin) + ' %'}</b>${x.cesCon != null && x.cesSin != null ? `<br>Brecha: ${f1(x.cesSin - x.cesCon)} pp` : ''}`;
     const tipP = `<div class="t">Si este dolor desapareciera</div>Quienes lo viven (${f1(x.pct)} %) pasarían a calificar como quienes no lo viven: el NPS iría de ${f1(tot.nps)} a ${f1(x.sin)}.<br>${f1(x.pct)} % × ${f1(br)} pts de brecha = <b>${fpp(x.pts)} pts</b>`;
-    return `<li class="dol${poca ? ' poca' : ''}">
+    const sel = dolEst.sel === x.k, voz = dolEst.voz === x.k;
+    return `<li class="dol${poca ? ' poca' : ''}${sel ? ' dol-on' : ''}" data-k="${x.k}"${x.sin == null ? '' : ` data-x="${X(x.sin).toFixed(2)}" data-et="${esc(f1(x.sin) + ' sin este dolor')}"`}>
       <span class="rk">${String(i + 1).padStart(2, '0')}</span>
-      <div class="qu"><span class="mom">${DL.momentos[x.k]}</span><b>${esc(tit)}</b><q>${esc(cita)}</q></div>
+      <div class="qu"><span class="mom">${DL.momentos[x.k]}</span>
+        <div class="dol-tt"><button type="button" class="dol-t" aria-pressed="${sel}">${esc(tit)}</button>${botonVoces(x.k, voz)}</div><q>${esc(cita)}</q></div>
       <div class="vive"><b>${G.cuenta(x.pct, 1)} %</b><span>${f0(x.n)} encuestas</span>${poca ? '<span class="bajo">muestra baja</span>' : ''}</div>
       ${pista(x.con, x.sin, -100, tot.nps, '', tipN, i)}
       ${pista(x.cesCon, x.cesSin, 0, tot.ces, ' %', tipC, i + 1)}
       <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : G.cuenta(x.pts, 1, {signo: true})}</b><small>pts</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%" data-an="ancho" data-i="${i + 3}"></i></span></div>
+      ${voz ? vocesDolor(x.k) : ''}
     </li>`;
   }).join('');
   return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
       <div class="herr"><div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">${st.meses.length > 1 ? 'Meses elegidos' : 'Mes'}</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
       <p class="sub">${alcance()} · ${rango}. Lo que cuentan los clientes en sus comentarios, cruzado con lo que responden de NPS y CES. Arriba, el dolor que más puntos de NPS le quita a la nota.</p></header>
     ${cab}
-    <div class="dol-ley" aria-hidden="true"><span></span><span>Lo vive</span><span><i class="pt con"></i>Con el dolor <i class="pt sin"></i>Sin el dolor <i class="ref"></i>Total del corte · NPS</span><span>CES</span><span>NPS que recupera</span></div>
-    <ol class="dol-lista">${filasH || '<li class="vacio">Sin encuestas con estos filtros</li>'}</ol>
-    <p class="nota dol-nota">Cada dolor sale de los comentarios (Q3, Q13, Q7 y Q10) con las mismas reglas de los análisis de dolores de Soporte y Fallas masivas. «La falla sigue» suma además a quien responde que su servicio no funciona (Q8). Los puntos son teóricos: suponen que quien deja de vivir el dolor califica igual que quien nunca lo vivió. Como un cliente puede tener varios dolores, los puntos de las filas no se suman; el número de arriba cuenta cada encuesta una sola vez.</p>
+    ${leyendaDolores('Lo vive', 'NPS', 'CES', 'NPS que recupera')}
+    <ol class="dol-lista${dolEst.sel && orden.some(x => x.k === dolEst.sel) ? ' con-sel' : ''}">${filasH || '<li class="vacio">Sin encuestas con estos filtros</li>'}</ol>
+    <p class="nota dol-nota">Cada dolor sale de los comentarios (Q3, Q13, Q7 y Q10) con las mismas reglas de los análisis de dolores de Soporte y Fallas masivas. «La falla sigue» suma además a quien responde que su servicio no funciona (Q8). Clic en un dolor para resaltarlo y en el globo para leer lo que más repiten quienes lo viven. Los puntos son teóricos: suponen que quien deja de vivir el dolor califica igual que quien nunca lo vivió. Como un cliente puede tener varios dolores, los puntos de las filas no se suman; el número de arriba cuenta cada encuesta una sola vez.</p>
   </section>`;
+}
+
+// ------------------------------------------------------------------ dolores: resaltar uno y leer lo que más repiten
+// Encabezado de la lista: el nombre del indicador grande y debajo la clave de los puntos, centrado sobre su columna
+const pareja = (c, t) => `<span><i class="pt ${c}"></i>${t}</span>`;
+const leyendaDolores = (vive, n1, n2, recupera) => {
+  const pts = `<small>${pareja('con', 'Con el dolor')}${pareja('sin', 'Sin el dolor')}<span><i class="ref"></i>Total</span></small>`;
+  return `<div class="dol-ley" aria-hidden="true"><span></span><span class="dl-t"><b>${vive}</b><small>de las encuestas</small></span>
+    <span class="dl-t"><b>${n1}</b>${pts}</span><span class="dl-t"><b>${n2}</b>${pts}</span><span class="dl-t"><b>${recupera}</b><small>si el dolor desaparece</small></span></div>`;
+};
+const ICO_VOZ = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7.5a2.5 2.5 0 0 1-2.5 2.5H10.5L6.6 19.7c-.5.4-1.1 0-1.1-.6v-2.6A2.5 2.5 0 0 1 4 14z"/><path d="M8.5 9h7M8.5 12.2h4.5"/></svg>';
+const botonVoces = (k, abierto) => `<button type="button" class="dol-com" aria-expanded="${abierto}" aria-label="Ver lo que más repiten quienes viven «${esc(DOLOR[k][0])}»" ${tipAttr('Lo que más repiten quienes viven este dolor')}>${ICO_VOZ}</button>`;
+// Punto del dolor elegido sobre el riel del recuadro de arriba: hasta dónde llegaría el NPS sin ese dolor
+function marcaElegido(orden, X) {
+  const x = dolEst.sel ? orden.find(d => d.k === dolEst.sel) : null, ok = x && x.sin != null;
+  return `<span class="pt elegido" style="left:${ok ? X(x.sin) : 50}%"${ok ? '' : ' hidden'}></span><span class="elegido-et" style="left:${ok ? X(x.sin) : 50}%"${ok ? '' : ' hidden'}>${ok ? esc(f1(x.sin) + ' sin este dolor') : ''}</span>`;
+}
+// Comentarios de quienes viven el dolor k (el comentario lo menciona), con los filtros y el periodo de la caja de dolores
+function comDolor(k) {
+  if (!C) return null;
+  const bit = DLC.indexOf(k);
+  if (bit < 0) return [];
+  const acum = dolEst.rango !== 'mes', anio = PERIODOS[st.periodo].slice(0, 4);
+  return C.filter(v => (v.dl >> bit) & 1 && util(v) && pasa(v.r, acum ? {periodo: null} : {}) && (!acum || (PERIODOS[v.r[0]].slice(0, 4) === anio && v.r[0] <= st.periodo)));
+}
+const recortar = (t, n) => t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t;
+// Lo que más repiten: palabras más frecuentes y comentarios agrupados (los casi iguales juntos), primero los que más se repiten
+function vocesDolor(k) {
+  const items = comDolor(k), tit = DOLOR[k][0];
+  if (items == null) return '<div class="dol-voces"><p class="nota">Cargando comentarios…</p></div>';
+  if (!items.length) return `<div class="dol-voces"><p class="nota">Sin comentarios que mencionen «${esc(tit)}» con estos filtros.</p></div>`;
+  const an = NUBE.analizar(items, NUBE_CFG), gr = NUBE.similares(items, null, NUBE_CFG, {df: an.df, max: 5}).grupos;
+  const pal = an.palabras.slice(0, 8);
+  return `<div class="dol-voces" role="region" aria-label="Lo que más repiten quienes viven ${esc(tit)}">
+    <div class="dv-cab"><b>Lo que más repiten</b><span class="nota">${f0(items.length)} ${items.length === 1 ? 'comentario menciona' : 'comentarios mencionan'} este dolor · los casi iguales van juntos</span></div>
+    ${pal.length ? `<div class="dv-pal" aria-label="Palabras que más se repiten">${pal.map(w => `<span>${esc(w.t)}<small>${f0(w.n)}</small></span>`).join('')}</div>` : ''}
+    <ol class="dv-lista">${gr.map(g => { const v = g.rep.v, n = g.miembros.length;
+      return `<li>${chipNota(v)}<q>${esc(recortar(v.texto, 300))}</q>${n > 1 ? `<span class="dv-rep" ${tipAttr(f0(n) + ' comentarios casi iguales')}>×${n}</span>` : '<span></span>'}<div class="dv-meta">${metaCom(v)}</div></li>`; }).join('')}</ol>
+  </div>`;
+}
+const anima = () => G.activo() && window.Motion;
+function pintarSel(sec, anim) {
+  const lista = sec.querySelector('.dol-lista'); if (!lista) return;
+  lista.classList.toggle('con-sel', !!dolEst.sel);
+  sec.querySelectorAll('.dol[data-k]').forEach(li => {
+    const on = li.dataset.k === dolEst.sel;
+    li.classList.toggle('dol-on', on); li.querySelector('.dol-t').setAttribute('aria-pressed', on);
+    if (on && anim && anima()) Motion.animate(li, {scale: [.98, 1]}, {type: 'spring', bounce: .45, duration: .5});
+  });
+  const m = sec.querySelector('.dh-pista .elegido'), et = sec.querySelector('.dh-pista .elegido-et');
+  const li = dolEst.sel ? sec.querySelector(`.dol[data-k="${dolEst.sel}"]`) : null;
+  if (!m || !et) return;
+  if (li && li.dataset.x) {
+    const nuevo = m.hidden;
+    m.hidden = et.hidden = false; m.style.left = et.style.left = li.dataset.x + '%'; et.textContent = li.dataset.et;
+    // WAAPI y no Motion: el marcador ya lleva translate(-50%) y Motion reemplazaría todo el transform
+    if (nuevo && anim && anima()) {
+      m.animate([{transform: 'translate(-50%,-50%) scale(0)'}, {transform: 'translate(-50%,-50%) scale(1)'}], {duration: 480, easing: 'cubic-bezier(.34,1.56,.64,1)'});
+      et.animate([{opacity: 0, transform: 'translate(-50%,6px)'}, {opacity: 1, transform: 'translate(-50%,0)'}], {duration: 300, easing: 'ease-out'});
+    }
+  } else m.hidden = et.hidden = true;
+}
+function ponerVoces(sec, anim) {
+  const k = dolEst.voz; if (!k) return;
+  const li = sec.querySelector(`.dol[data-k="${k}"]`);
+  if (!li) { dolEst.voz = null; return; }
+  li.querySelectorAll('.dol-voces').forEach(x => x.remove());
+  li.insertAdjacentHTML('beforeend', vocesDolor(k));
+  li.querySelector('.dol-com').setAttribute('aria-expanded', 'true');
+  const caja = li.querySelector('.dol-voces');
+  if (anim && anima()) {
+    Motion.animate(caja, {opacity: [0, 1], y: [-8, 0]}, {duration: .35, ease: [.22, 1, .36, 1]});
+    Motion.animate(caja.querySelectorAll('.dv-pal span, .dv-lista li'), {opacity: [0, 1], y: [8, 0]}, {duration: .35, delay: Motion.stagger(.035, {startDelay: .08})});
+  }
+}
+function abrirVoces(sec, k) {
+  const cerrar = dolEst.voz === k;
+  sec.querySelectorAll('.dol-voces').forEach(x => x.remove());
+  sec.querySelectorAll('.dol-com').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  dolEst.voz = cerrar ? null : k;
+  if (cerrar) return;
+  dolEst.sel = k; pintarSel(sec, true); ponerVoces(sec, true);
+  if (!C) cargarComentarios();
+}
+function montarDolSel(raiz) {
+  const sec = raiz.querySelector('#dolores'); if (!sec) return;
+  sec.querySelectorAll('.dol[data-k]').forEach(li => {
+    const k = li.dataset.k, elegir = () => { dolEst.sel = dolEst.sel === k ? null : k; pintarSel(sec, true); };
+    li.onclick = e => { if (!e.target.closest('.dol-com, .dol-voces, .dol-t')) elegir(); };
+    li.querySelector('.dol-t').onclick = elegir;
+    li.querySelector('.dol-com').onclick = () => abrirVoces(sec, k);
+  });
 }
 
 // ------------------------------------------------------------------ correlación con el NPS
@@ -678,6 +746,7 @@ function montarEvo(raiz) {
   raiz.querySelectorAll('#evo-m button').forEach(b => b.onclick = () => { st.modo = b.dataset.m; repintarEvo(); });
 }
 function montarDolores(raiz) {
+  montarDolSel(raiz.id === 'dolores' ? raiz.parentNode : raiz);
   raiz.querySelectorAll('#dol-r button').forEach(b => b.onclick = () => {
     dolEst.rango = b.dataset.r;
     const n = reemplazar(document.getElementById('dolores'), vDolores()); montarDolores(n); G.animar(n, {inmediato: true});
@@ -815,6 +884,7 @@ function vCalidad(p) {
 function conComentarios() {
   if (st.tab === 'voz') pintarTab({anim: false});
   else repintarCarruseles(document.getElementById('p-' + st.tab));
+  const sd = document.getElementById('dolores'); if (sd && dolEst.voz) ponerVoces(sd, false);
 }
 const VISTAS = {resumen: vResumen, facilidad: vFacilidad, resolucion: vResolucion, asesor: vAsesor, voz: vVoz, calidad: vCalidad};
 // o.anim = false: repinta en el estado final, sin animar (tema, buscador de Voces, comentarios)

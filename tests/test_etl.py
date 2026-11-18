@@ -154,7 +154,7 @@ def test_cifras_octubre(estudio, n, nps, ces, q8):
 def test_salida_sin_datos_personales():
     js = (DIR_PERIODOS.parent.parent / "tablero" / "comentarios.js").read_text(encoding="utf-8")
     datos = json.loads(js[len("window.COMENTARIOS="):].rstrip().rstrip(";"))
-    textos = [v[-1] for v in datos["filas"]]
+    textos = [v[datos["campos"].index("texto")] for v in datos["filas"]]
     assert calidad.escanear_pii([(t, []) for t in textos]) == []
     assert not calidad._CORREO.search(js)
 
@@ -257,3 +257,10 @@ def test_contacto_va_aparte():
     assert base.contacto(c, limpiar(c)) == {"R_1": ["12345678", "3001234567", "ana@correo.com"]}
     if OCT.exists():   # la cuenta y el correo no llegan a lo versionado (data/periodos)
         assert "@" not in json.dumps(json.loads(OCT.read_text(encoding="utf-8"))["base"])
+
+
+def test_marcar_comentario_dolores():
+    bit = lambda k: 1 << dolores.CLAVES.index(k)
+    assert dolores.marcar_comentario({"pregunta": "Q3", "texto": "Nunca llegó el técnico"}) & bit("visita")
+    assert dolores.marcar_comentario({"pregunta": "Q4", "texto": "Nunca llegó el técnico"}) == 0   # Q4 es elogio
+    assert dolores.marcar_comentario({"pregunta": "Q10", "texto": "Excelente atención"}) == 0

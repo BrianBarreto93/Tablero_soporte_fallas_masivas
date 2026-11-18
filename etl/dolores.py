@@ -58,3 +58,15 @@ def marcar(crudo, d):
 def categoria(m):
     """Texto con los dolores de cada encuesta, separados por « | » (orden del recorrido: antes, durante, después)."""
     return m[CLAVES].apply(lambda f: " | ".join(NOMBRES[k] for k in CLAVES if f[k]) or SIN_DOLOR, axis=1)
+
+
+# Para el ícono de comentarios de cada dolor en el tablero: cada comentario lleva una máscara de bits (bit i = CLAVES[i])
+# con los dolores de los que habla ese comentario (mismas expresiones, sobre ese texto solo; Q4 es elogio y no cuenta).
+def marcar_comentario(v):
+    if v.get("pregunta") not in TEXTOS or not v.get("texto"):
+        return 0
+    t, m = _norm(v["texto"]), 0
+    for i, k in enumerate(CLAVES):
+        if _RX[k].search(t):
+            m |= 1 << i
+    return m

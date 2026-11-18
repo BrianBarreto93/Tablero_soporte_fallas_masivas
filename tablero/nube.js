@@ -1,5 +1,5 @@
 /* nube.js · nube de temas de los comentarios (tableros Factura, pago y cobro / Soporte y Fallas masivas).
-   El MISMO archivo va en los dos tableros: si se cambia uno, copiarlo al otro. Usa graficos.js (GRAF.tono) y Motion si está.
+   El MISMO archivo va en los tres tableros (Factura, Soporte-FM y Digital): si se cambia uno, copiarlo a los otros. Usa graficos.js (GRAF.tono) y Motion si está.
 
    Qué hace:
    1. Parte cada comentario en palabras (minúsculas, sin tildes, sin palabras vacías) y agrupa singular/plural.
@@ -122,11 +122,11 @@ function jaccard(a, b) {
   for (k in b) if (!a[k]) u++;
   return u ? i / u : 0;
 }
-// Devuelve grupos de comentarios casi iguales que mencionan la palabra, del más repetido al menos.
+// Devuelve grupos de comentarios casi iguales que mencionan la palabra (key = null: todos), del más repetido al menos.
 // o = {cat: filtra por categoría, max: grupos, umbral: parecido mínimo para juntar (Jaccard)}
 function similares(items, key, cfg, o) {
   o = o || {};
-  var con = items.filter(function (v) { var p = preparar(v, cfg); return p.set[key] && (!o.cat || p.cats.indexOf(o.cat) >= 0); });
+  var con = items.filter(function (v) { var p = preparar(v, cfg); return (!key || p.set[key]) && (!o.cat || p.cats.indexOf(o.cat) >= 0); });
   if (!con.length) return {n: 0, grupos: []};
   // Centro: cuántos de estos comentarios usan cada palabra (pesada por rareza en todo el conjunto)
   var N = items.length, df = o.df || {}, cen = {};

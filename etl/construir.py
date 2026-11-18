@@ -161,7 +161,7 @@ def ensamblar():
                                                      -1 if v["q6"] is None else v["q6"],
                                                      -1 if v["q2"] is None else v["q2"],
                                                      -1 if v["q9"] is None else v["q9"],
-                                                     preguntas.index(v["pregunta"]), v["texto"]])
+                                                     preguntas.index(v["pregunta"]), v["texto"], dolores.marcar_comentario(v)])
 
     datos = {
         "generado": _ahora(), "tabla": per[-1]["tabla"], "n_minimo": N_MINIMO,
@@ -179,8 +179,9 @@ def ensamblar():
     js = "window.DATOS=" + json.dumps(datos, ensure_ascii=False, separators=(",", ":")) + ";\n"
     SALIDA_JS.write_text(js, encoding="utf-8")
     # Los comentarios pesan ~90 % del total: van aparte y el tablero los carga después de pintar
-    vjs = ("window.COMENTARIOS={\"campos\":" + json.dumps(dims + ["grupo", "q8", "q6", "q2", "q9", "pregunta", "texto"])
-           + ",\"filas\":" + json.dumps(vb, ensure_ascii=False, separators=(",", ":")) + "};\n")
+    # «dl» = máscara de dolores del comentario (bit i = dl_claves[i])
+    vjs = ("window.COMENTARIOS={\"campos\":" + json.dumps(dims + ["grupo", "q8", "q6", "q2", "q9", "pregunta", "texto", "dl"])
+           + ",\"dl_claves\":" + json.dumps(dolores.CLAVES) + ",\"filas\":" + json.dumps(vb, ensure_ascii=False, separators=(",", ":")) + "};\n")
     (SALIDA_JS.parent / "comentarios.js").write_text(vjs, encoding="utf-8")
     # Base descargable: un archivo por mes; el tablero carga solo los meses que se van a descargar
     dir_base = SALIDA_JS.parent / "base"

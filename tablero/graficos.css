@@ -1,4 +1,4 @@
-/* graficos.css · estilos de graficos.js. El MISMO archivo va en los dos tableros.
+/* graficos.css · estilos de graficos.js. El MISMO bloque va en los tres tableros (Factura, Soporte-FM y Digital).
    Rampa evaluativa de 9 tonos: --t0 rojo intenso (lo peor) → --t4 arena dorada (neutro) → --t8 verde sobrio (lo mejor). */
 :root[data-theme="light"]{
   --t0:#B50E1B; --t1:#CB2638; --t2:#D84B5B; --t3:#DF8381; --t4:#E2B865; --t5:#B7BE80; --t6:#82A987; --t7:#4C8968; --t8:#2A684B;
@@ -132,10 +132,43 @@
 .g-pt.on{r:6.5}
 .g-rampa-y{opacity:.9}
 
+/* Spark de los KPI: punto final que late */
+.g-spark-w{position:relative;margin-top:8px}
+.kpi .g-spark-w .spark{display:block;margin-top:0}
+.g-spark-pt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--panel);pointer-events:none}
+.g-spark-pt::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--c);opacity:0;animation:g-late 2.8s ease-out 1.6s 3}
+@keyframes g-late{0%{opacity:.7;transform:scale(.4)}100%{opacity:0;transform:scale(1.9)}}
+
+/* Líneas con movimiento (GRAF.lineas) */
+.ln{overflow:visible}
+.ln-grid{stroke:var(--line);stroke-width:1;stroke-dasharray:2 5;stroke-linecap:round}
+.ln-cero{stroke:var(--eje);stroke-width:1.2}
+.ln-ey{font:700 10.5px var(--f-num);fill:var(--ink-3);font-variant-numeric:tabular-nums}
+.ln-ex{font:700 11px var(--f-ui);fill:var(--ink-3)}
+.ln-ex.sel{fill:var(--panel);font-weight:800}
+.ln-pil{fill:var(--ink)}
+.ln-col{fill:color-mix(in srgb,var(--ink) 4.5%,transparent)}
+.ln-area{pointer-events:none}
+.ln-brillo{fill:none;opacity:.32;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ln-linea{fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ln-pt{stroke-width:2.4;transition:r .15s}
+.ln-pt.on{r:7}
+.ln-cometa{opacity:0;pointer-events:none;filter:drop-shadow(0 0 6px currentColor)}
+.ln-halo{fill:none;stroke-width:2;opacity:0;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.ln-late .ln-halo{animation:ln-pulso 2.6s ease-out 3}
+@keyframes ln-pulso{0%{opacity:.75;transform:scale(.8)}100%{opacity:0;transform:scale(2.8)}}
+.ln-et{pointer-events:none}
+.ln-et rect{transform-box:fill-box;transform-origin:left center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}
+.ln-et text{font:800 12px var(--f-num);font-variant-numeric:tabular-nums}
+.ln-espera .ln-fondo,.ln-espera .ln-area,.ln-espera .ln-pt,.ln-espera .ln-et{opacity:0}
+.ln-espera .ln-linea,.ln-espera .ln-brillo{stroke-dasharray:1 1;stroke-dashoffset:1}
+@media print{.g-spark-pt::after,.ln-halo,.ln-cometa{display:none}}
+
 @media (max-width:760px){
   .g-radial{grid-template-columns:1fr}
   .g-radial svg{max-width:220px;justify-self:center}
 }
 @media (prefers-reduced-motion:reduce){
   .g-pt,.g-dona-svg circle,.g-radial circle,.g-pal-p b i{transition:none}
+  .g-spark-pt::after,.ln-late .ln-halo{animation:none}
 }
