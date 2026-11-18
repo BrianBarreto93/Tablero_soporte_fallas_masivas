@@ -1,5 +1,19 @@
 # Cambios
 
+## 2026-11-18 · v8.1
+
+- Filtros de la barra de arriba con la selección resaltada, como los filtros de Voces: cada grupo es una cápsula con su
+  nombre sobre el borde (Mes, Estudio/Segmento/Proceso/Negocio); la opción elegida se rellena con su color y, si el grupo
+  filtra algo (no «Todos»), el borde y el nombre toman ese color y la cápsula brilla; al cambiar, late una vez. Los filtros
+  de lista (+ Región…) con algo elegido pasan a cápsula roja con el nombre arriba y solo el valor adentro.
+- Menú de vistas que se esconde: en pantalla ancha flota como una cápsula de vidrio (el contenido usa todo el ancho) y,
+  si no se usa, se disuelve en un asa delgada con un punto por vista (la activa, alargada en rojo). Vuelve con un resorte
+  al acercar el cursor al borde izquierdo, al pasar por el asa o con el teclado; los íconos entran en cascada, crecen
+  como en un dock según la cercanía del cursor y una luz roja sigue a la vista activa. En el celular, la barra de abajo
+  se esconde al bajar y vuelve al subir o al tocar el asa.
+- Todo en `tablero/navegacion.js` + `navegacion.css` (misma copia en Factura, Soporte-FM y Digital): decora lo que pinta
+  app.js, sin cambiar su lógica.
+
 ## 2026-11-18 · v8
 
 - Dolores del cliente: clic en un dolor para **resaltarlo** (los demás se apagan y en el recuadro de arriba aparece hasta
