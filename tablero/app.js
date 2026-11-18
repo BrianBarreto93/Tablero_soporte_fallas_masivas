@@ -49,7 +49,7 @@ const IND = {
   ces: {nombre: 'CES · facilidad', corto: 'CES', min: 0, max: 100,
     def: 'Facilidad para recibir solución: (Fácil + Muy fácil) / respuestas válidas de Q6 «¿Qué tan fácil fue contactarse con un asesor para reportar la falla?». Más alto = mejor.',
     calc: a => prop(a.q6_4 + a.q6_5, a.q6_1 + a.q6_2 + a.q6_3 + a.q6_4 + a.q6_5)},
-  fun: {nombre: 'Servicio funcionando', corto: 'Funcionando', min: 0, max: 100,
+  fun: {nombre: 'Servicio funcionando', corto: 'Serv. Funcionando', min: 0, max: 100,
     def: '% que responde «Sí» a Q8 «¿Tu servicio se encuentra funcionando correctamente?». Base: Sí + No (las encuestas sin terminar no cuentan).',
     calc: a => prop(a.q8_si, a.q8_si + a.q8_no)},
   ase: {nombre: 'Desempeño del asesor', corto: 'Asesor', min: 0, max: 100,
