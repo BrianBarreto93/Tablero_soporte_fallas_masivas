@@ -9,13 +9,14 @@
 
 Trampa: en esta vista un IN (...) de más de 8 cuentas devuelve filas de menos SIN error (5.000 cuentas → 8 de 2.433).
 Por eso se baja la parte FTTH de la vista completa (~1,7 M filas, ~10 s) y se cruza en pandas.
-Credenciales: .env de claro_CR_Recurrencia (las del .env propio fallan por LDAP desde nov-2026).
+Credenciales: YELLOWBRICK_* del .env del proyecto (Windows) o, si no están, del .env de claro_CR_Recurrencia en el servidor
+(las del .env propio del servidor fallan por LDAP desde nov-2026).
 """
 import pandas as pd
 import psycopg2
 from dotenv import dotenv_values
 
-from etl.config import SIN_DATO
+from etl.config import RAIZ, SIN_DATO
 
 ENV_YB = "/opt/apps/claro_CR_Recurrencia/.env"
 FTTH = {"FTT": "FTTH propia", "RED NEUTRA": "FTTH neutra"}
@@ -24,7 +25,7 @@ SIN_CLASIFICAR = "FTTH sin clasificar"
 
 def cargar():
     """{'cuentas': DataFrame(clase, desde) por cuenta, 'nodos': Series nodo → clase}."""
-    e = dotenv_values(ENV_YB)
+    e = {**dotenv_values(ENV_YB), **{k: v for k, v in dotenv_values(RAIZ / ".env").items() if v}}
     c = psycopg2.connect(host=e["YELLOWBRICK_HOST"], port=int(e["YELLOWBRICK_PORT"]), dbname="dwh_db",
                          user=e["YELLOWBRICK_USER"], password=e["YELLOWBRICK_PASSWORD"], connect_timeout=30)
     try:
