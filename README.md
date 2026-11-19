@@ -9,7 +9,8 @@ descargable sale de Yellowbrick (`VW_CLIEN_SERVICIOS_FTTH`, credenciales del `.e
 
 ## Vistas
 
-Capturas de octubre 2026 (cierre completo); el tablero abre en el último mes disponible. Modo claro por defecto, con botón para oscuro.
+Capturas de octubre 2026 (cierre completo; regeneradas el 2026-11-19); el tablero abre en el último mes disponible. Modo claro por defecto, con botón para oscuro.
+Se quitó de las capturas la sección «Lo que dicen los clientes» (comentarios literales); la pestaña **Voces** tampoco se muestra.
 
 **Resumen.** Los cuatro indicadores con tendencia, la evolución mes a mes, las alarmas y la caja de dolores del cliente.
 
